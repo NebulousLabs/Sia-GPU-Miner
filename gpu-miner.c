@@ -230,7 +230,7 @@ int main() {
 			printf("No hash was found. Fetching new block.\n");
 			// Hashrate is inaccurate if a block was found
 			double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-			printf("Mined for %.2f seconds at %.3f MH/s\n\n", run_time_seconds, (16*256*global_item_size) / (run_time_seconds*1000000));
+			printf("Mined for %.2f seconds at %.3f MH/s\n\n", run_time_seconds, (8*256*global_item_size) / (run_time_seconds*1000000));
 			// TODO: Print est time until next block (target difficulty / hashrate
 		}
 	}
