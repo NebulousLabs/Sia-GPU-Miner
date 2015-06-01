@@ -34,6 +34,7 @@ int main() {
 	cl_mem targmobj = NULL;
 	cl_mem nonceOutmobj = NULL;	
 	cl_mem nonceOutLockmobj = NULL;	
+	cl_mem numItersPerThreadmobj = NULL;
 	cl_program program = NULL;
 	cl_kernel kernel = NULL;	
 	cl_uint ret_num_devices;
@@ -50,7 +51,8 @@ int main() {
 	uint8_t headerHash[32];
 	uint8_t target[32];
 	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
-	uint8_t nonceOutLock[1] = {0};
+	uint8_t nonceOutLock = 0;
+	uint32_t numItersPerThread = 256 * 16; // This must be a multiple of 256 and no more than 256 * 256
 
 	// Store block from siad
 	uint8_t *block;
@@ -104,6 +106,8 @@ int main() {
 	if (ret != CL_SUCCESS) { printf("failed to create nonceOutmobj buffer: %d\n", ret); return -1; }
 	nonceOutLockmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create nonceOutmobj buffer: %d\n", ret); return -1; }
+	numItersPerThreadmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(uint32_t), NULL, &ret);
+	if (ret != CL_SUCCESS) { printf("failed to create numItersPerThreadmobj buffer: %d\n", ret); return -1; }
 
 	// Create kernel program from source file
 	program = clCreateProgramWithSource(context, 1, (const char **)&source_str, (const size_t *)&source_size, &ret);
@@ -157,6 +161,8 @@ int main() {
 	if (ret != CL_SUCCESS) { printf("failed to set second kernel arg: \n"); return -1; }
 	ret = clSetKernelArg(kernel, 4, sizeof(cl_mem), (void *)&nonceOutLockmobj);
 	if (ret != CL_SUCCESS) { printf("failed to set fourth kernel arg: \n"); return -1; }
+	ret = clSetKernelArg(kernel, 5, sizeof(cl_mem), (void *)&numItersPerThreadmobj);
+	if (ret != CL_SUCCESS) { printf("failed to set fourth kernel arg: \n"); return -1; }
 
 	// Mine blocks until program is interrupted
 	// Each iteration of the loop should take 1-3 seconds
@@ -171,17 +177,19 @@ int main() {
 		for (i = 0; i < 32; i++)
 			headerHash[i] = 255;
 
+		nonceOutLock = 0;
+
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); return -1; }
 		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); return -1; }
+		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); return -1; }
 		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); return -1; }
-		ret = clEnqueueWriteBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to nonceOutmobj buffer: %d\n", ret); return -1; }
-		ret = clEnqueueWriteBuffer(command_queue, nonceOutLockmobj, CL_TRUE, 0, sizeof(uint8_t), nonceOutLock, 0, NULL, NULL);
+		ret = clEnqueueWriteBuffer(command_queue, nonceOutLockmobj, CL_TRUE, 0, sizeof(uint8_t), &nonceOutLock, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to nonceOutLockmobj buffer: %d\n", ret); return -1; }
+		ret = clEnqueueWriteBuffer(command_queue, numItersPerThreadmobj, CL_TRUE, 0, sizeof(uint32_t), &numItersPerThread, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); return -1; }
 
 		// Execute OpenCL kernel as data parallel
 		printf("Starting %zd threads.\n", global_item_size);
@@ -230,7 +238,7 @@ int main() {
 			printf("No hash was found. Fetching new block.\n");
 			// Hashrate is inaccurate if a block was found
 			double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-			printf("Mined for %.2f seconds at %.3f MH/s\n\n", run_time_seconds, (8*256*global_item_size) / (run_time_seconds*1000000));
+			printf("Mined for %.2f seconds at %.3f MH/s\n\n", run_time_seconds, (numItersPerThread*global_item_size) / (run_time_seconds*1000000));
 			// TODO: Print est time until next block (target difficulty / hashrate
 		}
 	}
@@ -241,8 +249,10 @@ int main() {
 	ret = clReleaseKernel(kernel);
 	ret = clReleaseProgram(program);
 	ret = clReleaseMemObject(blockHeadermobj);
-	ret = clReleaseMemObject(nonceOutmobj);
 	ret = clReleaseMemObject(targmobj);
+	ret = clReleaseMemObject(nonceOutmobj);
+	ret = clReleaseMemObject(nonceOutLockmobj);
+	ret = clReleaseMemObject(numItersPerThreadmobj);
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);	
  

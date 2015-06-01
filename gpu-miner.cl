@@ -1,10 +1,11 @@
 int blake2b( uchar *out, uchar *in );
 
 // The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut, __global bool *nonceOutLock) {
+__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut, __global bool *nonceOutLock, __global uint *numItersIn) {
 	private uchar blockHeader[80];
 	private uchar headerHash[32];
 	private uchar target[32];
+	private uint numOuterIter = *numItersIn / 256;
 	headerHash[0] = 255;
 
 	// Copy header to private memory
@@ -23,7 +24,7 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	}
 
 	// Grind nonce values
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < numOuterIter; i++) {
 		// inc nonce
 		blockHeader[38] = i;
 		for (j = 0; j < 256; j++) {
