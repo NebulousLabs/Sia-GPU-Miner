@@ -27,6 +27,7 @@ cl_int ret;
 
 CURL *curl;
 
+unsigned int blocks_mined = 0;
 
 int main() {   
 	cl_platform_id platform_id = NULL;
@@ -143,22 +144,28 @@ int main() {
 	if (ret != CL_SUCCESS) { printf("failed to set fourth kernel arg: \n"); exit(1); }
 
 	// Rough scan for 'optimal' thread count
-	double prev_hash_rate = 0;
+	double hash_rate, prev_hash_rate = 0;
 	global_item_size = 16;
 	iter_per_thread = 16 * 256;
 	while(1) {
 		global_item_size *= 2;
-		double hash_rate = grindNonces(global_item_size, iter_per_thread);
-		while (hash_rate == -1) {
+		double temp = grindNonces(global_item_size, iter_per_thread);
+		while (temp == -1) {
 			// Repeat until no block is found
-			hash_rate = grindNonces(global_item_size, iter_per_thread);
+			temp = grindNonces(global_item_size, iter_per_thread);
+			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+			fflush(stdout);
 		}
+		hash_rate = temp;
+		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+		fflush(stdout);
 		if (hash_rate < prev_hash_rate) {
 			break;
 		}
 		prev_hash_rate = hash_rate;
 	}
-	printf("Rough search found %zd threads to be the best at %.3f MH/s\n", global_item_size/2, prev_hash_rate);
+	printf("\rRough search found %zd threads to be the best at %.3f MH/s\n", global_item_size/2, prev_hash_rate);
+	fflush(stdout);
 
 	// Now we know the optimal is betweem global_item_size and global_item_size / 2
 	// Scan intermediate 16 values and pick the highest
@@ -167,18 +174,24 @@ int main() {
 	size_t best_item_size = global_item_size / 2;
 	for (i = 0; i < 16; i++) {
 		global_item_size -= dec;
-		double hash_rate = grindNonces(global_item_size, iter_per_thread);
-		while (hash_rate == -1) {
+		double temp = grindNonces(global_item_size, iter_per_thread);
+		while (temp == -1) {
 			// Repeat until no block is found
-			hash_rate = grindNonces(global_item_size, iter_per_thread);
+			temp = grindNonces(global_item_size, iter_per_thread);
+			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+			fflush(stdout);
 		}
+		hash_rate = temp;
+		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+		fflush(stdout);
 		if (hash_rate > best_hash_rate) {
 			best_hash_rate = hash_rate;
 			best_item_size = global_item_size;
 		}
 	}
 	global_item_size = best_item_size;
-	printf("Fine search found %zd threads to be the best at %.3f MH/s\n", global_item_size, best_hash_rate);
+	printf("\rFine search found %zd threads to be the best at %.3f MH/s\n", global_item_size, best_hash_rate);
+	fflush(stdout);
 
 	// Make each iteration take about 3 seconds
 	clock_t startTime = clock();
@@ -188,7 +201,16 @@ int main() {
 
 	// Grind nonces endlessly using
 	while (1) {
-		grindNonces(global_item_size, iter_per_thread);
+		double temp = grindNonces(global_item_size, iter_per_thread);
+		while (temp == -1) {
+			// Repeat until no block is found
+			temp = grindNonces(global_item_size, iter_per_thread);
+			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+			fflush(stdout);
+		}
+		hash_rate = temp;
+		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+		fflush(stdout);
 	}
 	
 	// Finalization
@@ -254,7 +276,6 @@ double grindNonces(size_t global_item_size, size_t iter_per_thread) {
 	// Execute OpenCL kernel as data parallel
 	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
 	if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
-	printf("Starting %zd threads.\n", global_item_size);
 
 	// Copy result to host
 	ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
@@ -267,39 +288,16 @@ double grindNonces(size_t global_item_size, size_t iter_per_thread) {
 	while (target[i] == headerHash[i])
 		i++;
 	if (headerHash[i] < target[i]) {
-		// Display some info about the hash that was found
-		printf("Thread %u found a good hash!\n", nonceOut[0] * 256 + nonceOut[1]);
-
-		printf("Header: [");
-		for (i = 0; i < 10; i++) {
-			printf("%u ", blockHeader[i]);
-		}
-		printf("... %u]\n", blockHeader[79]);
-
-		printf("Hash: [");
-		for (i = 0; i < 10; i++) {
-			printf("%u ", headerHash[i]);
-		}
-		printf("... %u]\n", headerHash[31]);
-
-		printf("Nonce: [");
-		for (i = 0; i < 7; i++) {
-			printf("%u ", nonceOut[i]);
-		}
-		printf("%u]\n", nonceOut[7]);
-
 		// Copy nonce to block
 		for (i = 0; i < 8; i++)
 			block[i + 32] = nonceOut[i];
 
 		submit_block(curl, block, blocklen);
-		printf("\n");
+		blocks_mined++;
 	} else {
-		printf("No hash was found. Fetching new block.\n");
 		// Hashrate is inaccurate if a block was found
 		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 		double hash_rate = (iter_per_thread*global_item_size) / (run_time_seconds*1000000);
-		printf("Mined for %.2f seconds at %.3f MH/s\n\n", run_time_seconds, hash_rate);
 		// TODO: Print est time until next block (target difficulty / hashrate
 		return hash_rate;
 	}
