@@ -11,6 +11,8 @@ struct inData {
 
 // Write network data to an array of bytes
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
+	if (in == NULL)
+		return size*nmemb;
 	size_t new_len = size*nmemb;
 	in->bytes = (uint8_t*)malloc(new_len);
 	if (in->bytes == NULL) {
@@ -37,6 +39,7 @@ void get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **
 		res = curl_easy_perform(curl);
 		if(res != CURLE_OK) {
 			fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+			fprintf(stderr, "Are you sure that siad is running?\n");
 			exit(1);
 		}
 		if (in.len < 152) {
@@ -71,6 +74,9 @@ void submit_block(CURL *curl, uint8_t *block, size_t blocklen) {
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, numBytes);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, block);
+		// Prevent printing to stdout
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
 
 		res = curl_easy_perform(curl);
 		if (res != CURLE_OK) {
