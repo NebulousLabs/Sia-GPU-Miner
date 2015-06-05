@@ -13,8 +13,6 @@
  
 #define MAX_SOURCE_SIZE (0x200000)
 
-double grindNonces(size_t global_item_size, size_t iter_per_thread);
-
 cl_command_queue command_queue = NULL;
 cl_mem blockHeadermobj = NULL;
 cl_mem headerHashmobj = NULL;
@@ -28,6 +26,82 @@ cl_int ret;
 CURL *curl;
 
 unsigned int blocks_mined = 0;
+
+
+// Perform global_item_size * iter_per_thread hashes
+// Return -1 if a block is found
+// Else return the hashrate in MH/s
+double grindNonces(size_t global_item_size, size_t iter_per_thread) {
+	uint8_t blockHeader[80];
+	uint8_t headerHash[32];
+	uint8_t target[32];
+	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
+	uint8_t nonceOutLock = 0;
+
+	int i;
+	for (i = 0; i < 8; i++) {
+		nonceOut[i] = 0;
+	}
+
+	// Max out hash
+	for (i = 0; i < 32; i++) {
+		headerHash[i] = 255;
+	}
+
+	// Store block from siad
+	uint8_t *block;
+	size_t blocklen = 0;
+
+	// Get new block header and target
+	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
+
+	// Start timing this iteration
+	clock_t startTime = clock();
+
+	// Copy input data to the memory buffer
+	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
+	ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+	ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+	ret = clEnqueueWriteBuffer(command_queue, nonceOutLockmobj, CL_TRUE, 0, sizeof(uint8_t), &nonceOutLock, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to write to nonceOutLockmobj buffer: %d\n", ret); exit(1); }
+	ret = clEnqueueWriteBuffer(command_queue, iter_per_threadmobj, CL_TRUE, 0, sizeof(uint32_t), &iter_per_thread, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+
+	// Execute OpenCL kernel as data parallel
+	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
+
+	// Copy result to host
+	ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
+	ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
+
+	// Did we find one?
+	i = 0;
+	while (target[i] == headerHash[i]) {
+		i++;
+	}
+	if (headerHash[i] < target[i]) {
+		// Copy nonce to block
+		for (i = 0; i < 8; i++) {
+			block[i + 32] = nonceOut[i];
+		}
+
+		submit_block(curl, block, blocklen);
+		blocks_mined++;
+	} else {
+		// Hashrate is inaccurate if a block was found
+		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+		double hash_rate = (iter_per_thread*global_item_size) / (run_time_seconds*1000000);
+		// TODO: Print est time until next block (target difficulty / hashrate
+		return hash_rate;
+	}
+	return -1;
+}
 
 int main() {   
 	cl_platform_id platform_id = NULL;
@@ -90,7 +164,7 @@ int main() {
 
 	// Create kernel program from source file
 	program = clCreateProgramWithSource(context, 1, (const char **)&source_str, (const size_t *)&source_size, &ret);
-	if (ret != CL_SUCCESS) printf("failed to build with source: %d\n", ret);
+	if (ret != CL_SUCCESS) { printf("failed to crate program with source: %d\n", ret); exit(1); }
 	ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
 	if (ret != CL_SUCCESS) {
 		// Print information about why the build failed
@@ -100,8 +174,7 @@ int main() {
 		cl_build_status bldstatus;
 		printf("\nError %d: Failed to build program executable [ ]\n", ret);
 		ret = clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_STATUS, sizeof(bldstatus), (void *)&bldstatus, &len);
-		if (ret != CL_SUCCESS)
-		{
+		if (ret != CL_SUCCESS) {
 			printf("Build Status error %d\n", ret);
 			exit(1);
 		}
@@ -110,15 +183,13 @@ int main() {
 		if (bldstatus == CL_BUILD_ERROR) printf("Build Status: CL_BUILD_ERROR\n");
 		if (bldstatus == CL_BUILD_IN_PROGRESS) printf("Build Status: CL_BUILD_IN_PROGRESS\n");
 		ret = clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_OPTIONS, sizeof(buffer), buffer, &len);
-		if (ret != CL_SUCCESS)
-		{
+		if (ret != CL_SUCCESS) {
 			printf("Build Options error %d\n", ret);
 			exit(1);
 		}
 		printf("Build Options: %s\n", buffer);
 		ret = clGetProgramBuildInfo(program, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-		if (ret != CL_SUCCESS)
-		{
+		if (ret != CL_SUCCESS) {
 			printf("Build Log error %d\n", ret);
 			exit(1);
 		}
@@ -145,11 +216,17 @@ int main() {
 
 	// Rough scan for 'optimal' thread count
 	double hash_rate, prev_hash_rate = 0;
-	global_item_size = 16;
+	global_item_size = 192;
 	iter_per_thread = 16 * 256;
-	while(1) {
+	while(global_item_size < (256*256)/2) {
 		global_item_size *= 2;
+
+		// Make each iteration take about 3 seconds
+		clock_t startTime = clock();
 		double temp = grindNonces(global_item_size, iter_per_thread);
+		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+		iter_per_thread *= 3 / run_time_seconds;
+
 		while (temp == -1) {
 			// Repeat until no block is found
 			temp = grindNonces(global_item_size, iter_per_thread);
@@ -159,9 +236,6 @@ int main() {
 		hash_rate = temp;
 		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 		fflush(stdout);
-		if (hash_rate < prev_hash_rate) {
-			break;
-		}
 		prev_hash_rate = hash_rate;
 	}
 	printf("\rRough search found %zd threads to be the best at %.3f MH/s\n", global_item_size/2, prev_hash_rate);
@@ -169,12 +243,18 @@ int main() {
 
 	// Now we know the optimal is betweem global_item_size and global_item_size / 2
 	// Scan intermediate 16 values and pick the highest
-	int dec = (global_item_size - global_item_size / 2) / 16;
+	int step_size = (global_item_size - global_item_size / 2) / 16;
 	double best_hash_rate = prev_hash_rate;
 	size_t best_item_size = global_item_size / 2;
-	for (i = 0; i < 16; i++) {
-		global_item_size -= dec;
+	for (i = 0; i <= 16; i++) {
+		global_item_size -= step_size;
+
+		// Make each iteration take about 3 seconds
+		clock_t startTime = clock();
 		double temp = grindNonces(global_item_size, iter_per_thread);
+		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+		iter_per_thread *= 3 / run_time_seconds;
+
 		while (temp == -1) {
 			// Repeat until no block is found
 			temp = grindNonces(global_item_size, iter_per_thread);
@@ -231,75 +311,4 @@ int main() {
 	free(source_str);
  
 	return 0;
-}
-
-// Perform global_item_size * iter_per_thread hashes
-// Return -1 if a block is found
-// Else return the hashrate in MH/s
-double grindNonces(size_t global_item_size, size_t iter_per_thread) {
-	uint8_t blockHeader[80];
-	uint8_t headerHash[32];
-	uint8_t target[32];
-	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
-	uint8_t nonceOutLock = 0;
-
-	int i;
-	for (i = 0; i < 8; i++)
-		nonceOut[i] = 0;
-
-	// Max out hash
-	for (i = 0; i < 32; i++)
-		headerHash[i] = 255;
-
-	// Store block from siad
-	uint8_t *block;
-	size_t blocklen = 0;
-
-	// Get new block header and target
-	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
-
-	// Start timing this iteration
-	clock_t startTime = clock();
-
-	// Copy input data to the memory buffer
-	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, nonceOutLockmobj, CL_TRUE, 0, sizeof(uint8_t), &nonceOutLock, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to nonceOutLockmobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, iter_per_threadmobj, CL_TRUE, 0, sizeof(uint32_t), &iter_per_thread, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
-
-	// Execute OpenCL kernel as data parallel
-	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, NULL, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
-
-	// Copy result to host
-	ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
-
-	// Did we find one?
-	i = 0;
-	while (target[i] == headerHash[i])
-		i++;
-	if (headerHash[i] < target[i]) {
-		// Copy nonce to block
-		for (i = 0; i < 8; i++)
-			block[i + 32] = nonceOut[i];
-
-		submit_block(curl, block, blocklen);
-		blocks_mined++;
-	} else {
-		// Hashrate is inaccurate if a block was found
-		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-		double hash_rate = (iter_per_thread*global_item_size) / (run_time_seconds*1000000);
-		// TODO: Print est time until next block (target difficulty / hashrate
-		return hash_rate;
-	}
-	return -1;
 }

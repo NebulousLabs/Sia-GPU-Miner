@@ -60,20 +60,22 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	}
 }
 
-// Implementations of memset and memcopy
-void *memset( __private void *s, __private int c, __private size_t n) {
+// Implementations of clmemset and memcopy
+void *clmemset( __private void *s, __private int c, __private size_t n) {
 	uchar *p = s;
-	while(n--)
+	while(n--) {
 		*p++ = (uchar)c;
+	}
 	return s;
 }
 
-void memcpy( __private void *dest, __private const void *src, __private size_t num) {
+void clmemcpy( __private void *dest, __private const void *src, __private size_t num) {
 	int i = 0 ;
 	char *dest8 = (char*)dest;
 	char *src8 = (char*)src;
-	for (int i = 0; i < num; i++)
+	for (int i = 0; i < num; i++) {
 		dest8[i] = src8[i];
+	}
 }
 
 // the code taken from offical Blake2b C reference:
@@ -247,7 +249,7 @@ static inline ulong rotr64( __private const ulong w, __private const unsigned c 
   return ( w >> c ) | ( w << ( 64 - c ) );
 }
 
-// prevents compiler optimizing out memset()
+// prevents compiler optimizing out clmemset()
 static inline void secure_zero_memory( __private void *v, __private size_t n )
 {
   volatile uchar *p = ( volatile uchar * )v;
@@ -319,7 +321,7 @@ static inline int blake2b_increment_counter( __private blake2b_state *S, __priva
 
 static inline int blake2b_init0( __private blake2b_state *S )
 {
-	memset( S, 0, sizeof( blake2b_state ) );
+	clmemset( S, 0, sizeof( blake2b_state ) );
 
 	for( int i = 0; i < 8; ++i ) S->h[i] = blake2b_IV[i];
 
@@ -352,9 +354,9 @@ int blake2b_init( __private blake2b_state *S )
 	store64( &P->node_offset, 0 );
 	P->node_depth = 0;
 	P->inner_length = 0;
-	memset( P->reserved, 0, sizeof( P->reserved ) );
-	memset( P->salt,		 0, sizeof( P->salt ) );
-	memset( P->personal, 0, sizeof( P->personal ) );
+	clmemset( P->reserved, 0, sizeof( P->reserved ) );
+	clmemset( P->salt,		 0, sizeof( P->salt ) );
+	clmemset( P->personal, 0, sizeof( P->personal ) );
 	return blake2b_init_param( S, P );
 }
 
@@ -375,16 +377,16 @@ int blake2b_init_key( __private blake2b_state *S, __private const uchar outlen, 
 	store64( &P->node_offset, 0 );
 	P->node_depth		= 0;
 	P->inner_length	= 0;
-	memset( P->reserved, 0, sizeof( P->reserved ) );
-	memset( P->salt,		 0, sizeof( P->salt ) );
-	memset( P->personal, 0, sizeof( P->personal ) );
+	clmemset( P->reserved, 0, sizeof( P->reserved ) );
+	clmemset( P->salt,		 0, sizeof( P->salt ) );
+	clmemset( P->personal, 0, sizeof( P->personal ) );
 
 	if( blake2b_init_param( S, P ) < 0 ) return -1;
 
 	{
 		uchar block[BLAKE2B_BLOCKBYTES];
-		memset( block, 0, BLAKE2B_BLOCKBYTES );
-		memcpy( block, key, keylen );
+		clmemset( block, 0, BLAKE2B_BLOCKBYTES );
+		clmemcpy( block, key, keylen );
 		blake2b_update( S, block, BLAKE2B_BLOCKBYTES );
 		secure_zero_memory( block, BLAKE2B_BLOCKBYTES ); // Burn the key from stack
 	}
@@ -464,18 +466,18 @@ int blake2b_update( __private blake2b_state *S, __private const uchar *in, __pri
 
 		if( inlen > fill )
 		{
-			memcpy( S->buf + left, in, fill ); // Fill buffer
+			clmemcpy( S->buf + left, in, fill ); // Fill buffer
 			S->buflen += fill;
 			blake2b_increment_counter( S, BLAKE2B_BLOCKBYTES );
 			blake2b_compress( S, S->buf ); // Compress
-			memcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, BLAKE2B_BLOCKBYTES ); // Shift buffer left
+			clmemcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, BLAKE2B_BLOCKBYTES ); // Shift buffer left
 			S->buflen -= BLAKE2B_BLOCKBYTES;
 			in += fill;
 			inlen -= fill;
 		}
 		else // inlen <= fill
 		{
-			memcpy( S->buf + left, in, inlen );
+			clmemcpy( S->buf + left, in, inlen );
 			S->buflen += inlen; // Be lazy, do not compress
 			in += inlen;
 			inlen -= inlen;
@@ -495,18 +497,18 @@ int blake2b_final( __private blake2b_state *S, __private uchar *out )
 		blake2b_increment_counter( S, BLAKE2B_BLOCKBYTES );
 		blake2b_compress( S, S->buf );
 		S->buflen -= BLAKE2B_BLOCKBYTES;
-		memcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, S->buflen );
+		clmemcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, S->buflen );
 	}
 
 	blake2b_increment_counter( S, S->buflen );
 	blake2b_set_lastblock( S );
-	memset( S->buf + S->buflen, 0, 2 * BLAKE2B_BLOCKBYTES - S->buflen ); // Padding
+	clmemset( S->buf + S->buflen, 0, 2 * BLAKE2B_BLOCKBYTES - S->buflen ); // Padding
 	blake2b_compress( S, S->buf );
 
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
 		store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
 
-	memcpy( out, buffer, 32 );
+	clmemcpy( out, buffer, 32 );
 	return 0;
 }
 
