@@ -8,5 +8,5 @@ A GPU miner designed for mining siacoins. This miner runs in a command prompt an
 
 ##Notes
 *    Each Sia block takes about 10 minutes to mine.
-*    Once a block is mined, Sia waits for 144 confirmation blocks before the reward is added to your wallet, meaning about 24 hours.
+*    Once a block is mined, Sia waits for 144 confirmation blocks before the reward is added to your wallet, which takes about 24 hours.
 *    Sia currently doesn't have any mining pools. A p2pool portal is under development, and can be expected to be ready by the end of the summer.
