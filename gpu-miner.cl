@@ -1,62 +1,46 @@
 int blake2b( uchar *out, uchar *in );
 
 // The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut, __global bool *nonceOutLock, __global uint *numItersIn) {
-	private uchar blockHeader[80];
+__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
+	private uchar header[80];
 	private uchar headerHash[32];
 	private uchar target[32];
-	private uint numOuterIter = *numItersIn / 256;
 	headerHash[0] = 255;
 
-	// Copy header to private memory
-	private int i, j, z;
-	for (i = 0; i < 80; i++) {
-		blockHeader[i] = headerIn[i];
+	int i, z;
+	for (i = 0; i < 32; i++) {
+		target[i] = targ[i];
+		header[i] = headerIn[i];
+	}
+	for (i = 32; i < 80; i++) {
+		header[i] = headerIn[i];
 	}
 
 	// Set nonce
 	private int id = get_global_id(0);
-	blockHeader[32] = id / 256;
-	blockHeader[33] = id % 256;
+	// Support global work sizes of up to 256^4 - 1
+	header[32] = id / (256 * 256 * 256);
+	header[33] = id / (256 * 256);
+	header[34] = id / 256;
+	header[35] = id % 256;
 
-	for (i = 0; i < 32; i++) {
-		target[i] = targ[i];
+	// Hash the header
+	blake2b(headerHash, header);
+
+	// Compare header to target
+	z = 0;
+	while (target[z] == headerHash[z]) {
+		z++;
 	}
-
-	// Grind nonce values
-	for (i = 0; i < numOuterIter; i++) {
-		// inc nonce
-		blockHeader[38] = i;
-		for (j = 0; j < 256; j++) {
-			blockHeader[39] = j;
-
-			// Hash the header
-			blake2b(headerHash, blockHeader);
-
-			// Compare header to target
-			z = 0;
-			while (target[z] == headerHash[z]) {
-				z++;
-			}
-			if (headerHash[z] < target[z]) {
-				// Transfer the output to global space.
-				if (!(*nonceOutLock)) {
-					*nonceOutLock = true;
-					for (i = 0; i < 8; i++) {
-						nonceOut[i] = blockHeader[i + 32];
-					}
-					for (i = 0; i < 32; i++) {
-						hashOut[i] = headerHash[i];
-					}
-					// No reason to unlock (for now)
-				}
-				return;
-			}
+	if (headerHash[z] < target[z]) {
+		// Transfer the output to global space.
+		for (i = 0; i < 8; i++) {
+			nonceOut[i] = header[i + 32];
 		}
-		// Check if a disserent thread found the hash
-		if (*nonceOutLock) {
-			return;
+		for (i = 0; i < 32; i++) {
+			hashOut[i] = headerHash[i];
 		}
+		return;
 	}
 }
 
