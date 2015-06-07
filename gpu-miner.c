@@ -120,7 +120,7 @@ int main() {
 	cl_uint ret_num_devices;
 	cl_uint ret_num_platforms;
  
-	int max_compute_units;
+	int i;
 	size_t global_item_size = 1;
 
 	// Use curl to communicate with siad
@@ -145,9 +145,6 @@ int main() {
 	if (ret != CL_SUCCESS) { printf("failed to get platform IDs: %d\n", ret); exit(1); }
 	ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
 	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
-	ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(int), &max_compute_units, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to get device max compute units: %d\n", ret); exit(1); }
-	printf("Device max compute units:\t%d\n", max_compute_units);
 
 	// Create OpenCL Context
 	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
@@ -213,7 +210,6 @@ int main() {
 	ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&nonceOutmobj);
 	if (ret != CL_SUCCESS) { printf("failed to set second kernel arg: \n"); exit(1); }
 
-	// Rough scan for 'optimal' thread count
 	double hash_rate;
 	global_item_size = 256*256*16;
 
@@ -233,20 +229,21 @@ int main() {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= 0.01 / run_time_seconds;
+	global_item_size *= 0.015 / run_time_seconds;
 
 	// Grind nonces endlessly using
 	while (1) {
+		i++;
 		double temp = grindNonces(global_item_size);
 		while (temp == -1) {
 			// Repeat until no block is found
 			temp = grindNonces(global_item_size);
+		}
+		hash_rate = temp;
+		if (i % 15 == 0) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);
 		}
-		hash_rate = temp;
-		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
-		fflush(stdout);
 	}
 	
 	// Finalization
