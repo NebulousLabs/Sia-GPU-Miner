@@ -16,10 +16,12 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 
 	// Set nonce
 	private int id = get_global_id(0);
-	blockHeader[32] = id / (256 * 256 * 256);
-	blockHeader[33] = id / (256 * 256);
-	blockHeader[34] = id / 256;
-	blockHeader[35] = id % 256;
+	// Suppoer global work sizes of up to 256^5 - 1
+	blockHeader[32] = id / (256 * 256 * 256 * 256);
+	blockHeader[33] = id / (256 * 256 * 256);
+	blockHeader[34] = id / (256 * 256);
+	blockHeader[35] = id / 256;
+	blockHeader[36] = id % 256;
 
 	for (i = 0; i < 32; i++) {
 		target[i] = targ[i];
