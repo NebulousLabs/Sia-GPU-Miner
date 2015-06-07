@@ -36,6 +36,14 @@ unsigned int blocks_mined = 0;
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
 double grindNonces(size_t global_item_size) {
+	// Start timing this iteration
+	#ifdef __linux__
+	struct timespec begin, end;
+	clock_gettime(CLOCK_REALTIME, &begin);
+	#else
+	clock_t startTime = clock();
+	#endif
+
 	uint8_t blockHeader[80];
 	uint8_t headerHash[32];
 	uint8_t target[32];
@@ -53,14 +61,6 @@ double grindNonces(size_t global_item_size) {
 
 	// Get new block header and target
 	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
-
-	// Start timing this iteration
-	#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-	#else
-	clock_t startTime = clock();
-	#endif
 
 	// Copy input data to the memory buffer
 	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
@@ -105,7 +105,7 @@ double grindNonces(size_t global_item_size) {
 		#else
 		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 		#endif
-		double hash_rate = (255*global_item_size) / (run_time_seconds*1000000);
+		double hash_rate = global_item_size / (run_time_seconds*1000000);
 		// TODO: Print est time until next block (target difficulty / hashrate
 		return hash_rate;
 	}
@@ -233,7 +233,7 @@ int main() {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= 3 / run_time_seconds;
+	global_item_size *= 0.01 / run_time_seconds;
 
 	// Grind nonces endlessly using
 	while (1) {

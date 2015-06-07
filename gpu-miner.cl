@@ -24,27 +24,23 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	header[34] = id / 256;
 	header[35] = id % 256;
 
-	// Grind nonce values
-	for (header[39] = 0; header[39] < 255; header[39]++) {
+	// Hash the header
+	blake2b(headerHash, header);
 
-		// Hash the header
-		blake2b(headerHash, header);
-
-		// Compare header to target
-		z = 0;
-		while (target[z] == headerHash[z]) {
-			z++;
+	// Compare header to target
+	z = 0;
+	while (target[z] == headerHash[z]) {
+		z++;
+	}
+	if (headerHash[z] < target[z]) {
+		// Transfer the output to global space.
+		for (i = 0; i < 8; i++) {
+			nonceOut[i] = header[i + 32];
 		}
-		if (headerHash[z] < target[z]) {
-			// Transfer the output to global space.
-			for (i = 0; i < 8; i++) {
-				nonceOut[i] = header[i + 32];
-			}
-			for (i = 0; i < 32; i++) {
-				hashOut[i] = headerHash[i];
-			}
-			return;
+		for (i = 0; i < 32; i++) {
+			hashOut[i] = headerHash[i];
 		}
+		return;
 	}
 }
 
