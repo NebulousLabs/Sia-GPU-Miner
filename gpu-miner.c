@@ -1,3 +1,9 @@
+#ifdef __linux__
+#define _GNU_SOURCE
+#define _POSIX_SOURCE
+#include <sys/time.h>
+#endif
+
 #include <time.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -38,6 +44,8 @@ double grindNonces(size_t global_item_size, size_t iter_per_thread) {
 	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
 	uint8_t nonceOutLock = 0;
 
+	iter_per_thread -= iter_per_thread % 256;
+
 	int i;
 	for (i = 0; i < 8; i++) {
 		nonceOut[i] = 0;
@@ -56,7 +64,12 @@ double grindNonces(size_t global_item_size, size_t iter_per_thread) {
 	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
 
 	// Start timing this iteration
+	#ifdef __linux__
+	struct timespec begin, end;
+	clock_gettime(CLOCK_REALTIME, &begin);
+	#else
 	clock_t startTime = clock();
+	#endif
 
 	// Copy input data to the memory buffer
 	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
@@ -95,7 +108,14 @@ double grindNonces(size_t global_item_size, size_t iter_per_thread) {
 		blocks_mined++;
 	} else {
 		// Hashrate is inaccurate if a block was found
+		#ifdef __linux__
+		clock_gettime(CLOCK_REALTIME, &end);
+
+		double NanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+		double run_time_seconds = NanosecondsElapsed * 1e-9;
+		#else
 		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+		#endif
 		double hash_rate = (iter_per_thread*global_item_size) / (run_time_seconds*1000000);
 		// TODO: Print est time until next block (target difficulty / hashrate
 		return hash_rate;
@@ -222,9 +242,21 @@ int main() {
 		global_item_size *= 2;
 
 		// Make each iteration take about 3 seconds
+		#ifdef __linux__
+		struct timespec begin, end;
+		clock_gettime(CLOCK_REALTIME, &begin);
+		#else
 		clock_t startTime = clock();
+		#endif
 		double temp = grindNonces(global_item_size, iter_per_thread);
+		#ifdef __linux__
+		clock_gettime(CLOCK_REALTIME, &end);
+
+		double NanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+		double run_time_seconds = NanosecondsElapsed * 1e-9;
+		#else
 		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+		#endif
 		iter_per_thread *= 3 / run_time_seconds;
 
 		while (temp == -1) {
@@ -250,9 +282,21 @@ int main() {
 		global_item_size -= step_size;
 
 		// Make each iteration take about 3 seconds
+		#ifdef __linux__
+		struct timespec begin, end;
+		clock_gettime(CLOCK_REALTIME, &begin);
+		#else
 		clock_t startTime = clock();
+		#endif
 		double temp = grindNonces(global_item_size, iter_per_thread);
+		#ifdef __linux__
+		clock_gettime(CLOCK_REALTIME, &end);
+
+		double NanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+		double run_time_seconds = NanosecondsElapsed * 1e-9;
+		#else
 		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+		#endif
 		iter_per_thread *= 3 / run_time_seconds;
 
 		while (temp == -1) {
@@ -274,9 +318,21 @@ int main() {
 	fflush(stdout);
 
 	// Make each iteration take about 3 seconds
+	#ifdef __linux__
+	struct timespec begin, end;
+	clock_gettime(CLOCK_REALTIME, &begin);
+	#else
 	clock_t startTime = clock();
+	#endif
 	grindNonces(global_item_size, iter_per_thread);
+	#ifdef __linux__
+	clock_gettime(CLOCK_REALTIME, &end);
+
+	double NanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+	double run_time_seconds = NanosecondsElapsed * 1e-9;
+	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+	#endif
 	iter_per_thread *= 3 / run_time_seconds;
 
 	// Grind nonces endlessly using
