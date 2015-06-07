@@ -4,7 +4,7 @@ A GPU miner designed for mining siacoins. This miner runs in a command prompt an
 ##How to Use
 1) Make sure you have a recent version of Sia installed and running.
 
-2) Run the miner! Make sure the .cl file is in the same directory as your executable!
+2) Run the miner. Make sure the .cl file is in the same directory as your executable.
 
 ##Notes
 *    Each Sia block takes about 10 minutes to mine.
