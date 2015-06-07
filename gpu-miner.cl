@@ -66,20 +66,10 @@ void clmemcpy( __private void *dest, __private const void *src, __private size_t
 	}
 }
 
-// the code taken from offical Blake2b C reference:
-#ifndef __BLAKE2B__
-#define __BLAKE2B__
-
-// blake2.h
-
 #if defined(_MSC_VER)
 #define ALIGN(x) __declspec(align(x))
 #else
 #define ALIGN(x) __attribute__((aligned(x)))
-#endif
-
-#if defined(__cplusplus)
-extern "C" {
 #endif
 
   enum blake2b_constant
@@ -92,21 +82,6 @@ extern "C" {
   };
 
 #pragma pack(push, 1)
-  typedef struct __blake2b_param
-  {
-	uchar  digest_length; // 1
-	uchar  key_length;	// 2
-	uchar  fanout;		// 3
-	uchar  depth;		 // 4
-	uint leaf_length;   // 8
-	ulong node_offset;   // 16
-	uchar  node_depth;	// 17
-	uchar  inner_length;  // 18
-	uchar  reserved[14];  // 32
-	uchar  salt[BLAKE2B_SALTBYTES]; // 48
-	uchar  personal[BLAKE2B_PERSONALBYTES];  // 64
-  } blake2b_param;
-
   ALIGN( 64 ) typedef struct __blake2b_state
   {
 	ulong h[8];
@@ -116,135 +91,26 @@ extern "C" {
 	size_t   buflen;
 	uchar  last_node;
   } blake2b_state;
-
 #pragma pack(pop)
 
   // Streaming API
-  int blake2b_init( __private blake2b_state *S );
-  int blake2b_init_key( __private blake2b_state *S, __private const uchar outlen, __private const void *key, __private const uchar keylen );
-  int blake2b_init_param( __private blake2b_state *S, __private const blake2b_param *P );
   int blake2b_update( __private blake2b_state *S, __private const uchar *in, __private ulong inlen );
   int blake2b_final( __private blake2b_state *S, __private uchar *out );
 
-#if defined(__cplusplus)
-}
-#endif
-
-// blake2-impl.c
-
-static inline uint load32( __private const void *src )
-{
-#if defined(NATIVE_LITTLE_ENDIAN)
-  return *( uint * )( src );
-#else
-  const uchar *p = ( uchar * )src;
-  uint w = *p++;
-  w |= ( uint )( *p++ ) <<  8;
-  w |= ( uint )( *p++ ) << 16;
-  w |= ( uint )( *p++ ) << 24;
-  return w;
-#endif
-}
-
 static inline ulong load64( __private const void *src )
 {
-#if defined(NATIVE_LITTLE_ENDIAN)
   return *( ulong * )( src );
-#else
-  const uchar *p = ( uchar * )src;
-  ulong w = *p++;
-  w |= ( ulong )( *p++ ) <<  8;
-  w |= ( ulong )( *p++ ) << 16;
-  w |= ( ulong )( *p++ ) << 24;
-  w |= ( ulong )( *p++ ) << 32;
-  w |= ( ulong )( *p++ ) << 40;
-  w |= ( ulong )( *p++ ) << 48;
-  w |= ( ulong )( *p++ ) << 56;
-  return w;
-#endif
-}
-
-static inline void store32( __private void *dst, __private uint w )
-{
-#if defined(NATIVE_LITTLE_ENDIAN)
-  *( uint * )( dst ) = w;
-#else
-  uchar *p = ( uchar * )dst;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w;
-#endif
 }
 
 static inline void store64( __private void *dst, __private ulong w )
 {
-#if defined(NATIVE_LITTLE_ENDIAN)
   *( ulong * )( dst ) = w;
-#else
-  uchar *p = ( uchar * )dst;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w;
-#endif
-}
-
-static inline ulong load48( __private const void *src )
-{
-  const uchar *p = ( const uchar * )src;
-  ulong w = *p++;
-  w |= ( ulong )( *p++ ) <<  8;
-  w |= ( ulong )( *p++ ) << 16;
-  w |= ( ulong )( *p++ ) << 24;
-  w |= ( ulong )( *p++ ) << 32;
-  w |= ( ulong )( *p++ ) << 40;
-  return w;
-}
-
-static inline void store48( __private void *dst, __private ulong w )
-{
-  uchar *p = ( uchar * )dst;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w; w >>= 8;
-  *p++ = ( uchar )w;
-}
-
-static inline uint rotl32( __private const uint w, __private const unsigned c )
-{
-  return ( w << c ) | ( w >> ( 32 - c ) );
-}
-
-static inline ulong rotl64( __private const ulong w, __private const unsigned c )
-{
-  return ( w << c ) | ( w >> ( 64 - c ) );
-}
-
-static inline uint rotr32( __private const uint w, __private const unsigned c )
-{
-  return ( w >> c ) | ( w << ( 32 - c ) );
 }
 
 static inline ulong rotr64( __private const ulong w, __private const unsigned c )
 {
   return ( w >> c ) | ( w << ( 64 - c ) );
 }
-
-// prevents compiler optimizing out clmemset()
-static inline void secure_zero_memory( __private void *v, __private size_t n )
-{
-  volatile uchar *p = ( volatile uchar * )v;
-
-  while( n-- ) *p++ = 0;
-}
-
 
 // blake2b-ref.c
 __constant ulong blake2b_IV[8] =
@@ -270,116 +136,6 @@ __constant uchar blake2b_sigma[12][16] =
 	{	0,	1,	2,	3,	4,	5,	6,	7,	8,	9, 10, 11, 12, 13, 14, 15 } ,
 	{ 14, 10,	4,	8,	9, 15, 13,	6,	1, 12,	0,	2, 11,	7,	5,	3 }
 };
-
-static inline int blake2b_set_lastnode( __private blake2b_state *S )
-{
-	S->f[1] = ~((ulong)0);
-	return 0;
-}
-
-static inline int blake2b_clear_lastnode( __private blake2b_state *S )
-{
-	S->f[1] = ((ulong)0);
-	return 0;
-}
-
-// Some helper functions, not necessarily useful
-static inline int blake2b_set_lastblock( __private blake2b_state *S )
-{
-	if( S->last_node ) blake2b_set_lastnode( S );
-
-	S->f[0] = ~((ulong)0);
-	return 0;
-}
-
-static inline int blake2b_clear_lastblock( __private blake2b_state *S )
-{
-	if( S->last_node ) blake2b_clear_lastnode( S );
-
-	S->f[0] = ((ulong)0);
-	return 0;
-}
-
-static inline int blake2b_increment_counter( __private blake2b_state *S, __private const ulong inc )
-{
-	S->t[0] += inc;
-	S->t[1] += ( S->t[0] < inc );
-	return 0;
-}
-
-static inline int blake2b_init0( __private blake2b_state *S )
-{
-	clmemset( S, 0, sizeof( blake2b_state ) );
-
-	for( int i = 0; i < 8; ++i ) S->h[i] = blake2b_IV[i];
-
-	return 0;
-}
-
-// init xors IV with input parameter block
-int blake2b_init_param( __private blake2b_state *S, __private const blake2b_param *P )
-{
-	blake2b_init0( S );
-	uchar *p = ( uchar * )( P );
-
-	// IV XOR ParamBlock
-	for( size_t i = 0; i < 8; ++i )
-		S->h[i] ^= load64( p + sizeof( S->h[i] ) * i );
-
-	return 0;
-}
-
-
-int blake2b_init( __private blake2b_state *S )
-{
-	blake2b_param P[1];
-
-	P->digest_length = 32;
-	P->key_length = 0;
-	P->fanout = 1;
-	P->depth = 1;
-	store32( &P->leaf_length, 0 );
-	store64( &P->node_offset, 0 );
-	P->node_depth = 0;
-	P->inner_length = 0;
-	clmemset( P->reserved, 0, sizeof( P->reserved ) );
-	clmemset( P->salt,		 0, sizeof( P->salt ) );
-	clmemset( P->personal, 0, sizeof( P->personal ) );
-	return blake2b_init_param( S, P );
-}
-
-
-int blake2b_init_key( __private blake2b_state *S, __private const uchar outlen, __private const void *key, __private const uchar keylen )
-{
-	blake2b_param P[1];
-
-	if ( ( !outlen ) || ( outlen > BLAKE2B_OUTBYTES ) ) return -1;
-
-	if ( !key || !keylen || keylen > BLAKE2B_KEYBYTES ) return -1;
-
-	P->digest_length = outlen;
-	P->key_length		= keylen;
-	P->fanout				= 1;
-	P->depth				 = 1;
-	store32( &P->leaf_length, 0 );
-	store64( &P->node_offset, 0 );
-	P->node_depth		= 0;
-	P->inner_length	= 0;
-	clmemset( P->reserved, 0, sizeof( P->reserved ) );
-	clmemset( P->salt,		 0, sizeof( P->salt ) );
-	clmemset( P->personal, 0, sizeof( P->personal ) );
-
-	if( blake2b_init_param( S, P ) < 0 ) return -1;
-
-	{
-		uchar block[BLAKE2B_BLOCKBYTES];
-		clmemset( block, 0, BLAKE2B_BLOCKBYTES );
-		clmemcpy( block, key, keylen );
-		blake2b_update( S, block, BLAKE2B_BLOCKBYTES );
-		secure_zero_memory( block, BLAKE2B_BLOCKBYTES ); // Burn the key from stack
-	}
-	return 0;
-}
 
 static int blake2b_compress( __private blake2b_state *S, __private const uchar block[BLAKE2B_BLOCKBYTES] )
 {
@@ -444,72 +200,44 @@ static int blake2b_compress( __private blake2b_state *S, __private const uchar b
 	return 0;
 }
 
-// inlen now in bytes
-int blake2b_update( __private blake2b_state *S, __private const uchar *in, __private ulong inlen )
-{
-	while( inlen > 0 )
-	{
-		size_t left = S->buflen;
-		size_t fill = 2 * BLAKE2B_BLOCKBYTES - left;
-
-		if( inlen > fill )
-		{
-			clmemcpy( S->buf + left, in, fill ); // Fill buffer
-			S->buflen += fill;
-			blake2b_increment_counter( S, BLAKE2B_BLOCKBYTES );
-			blake2b_compress( S, S->buf ); // Compress
-			clmemcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, BLAKE2B_BLOCKBYTES ); // Shift buffer left
-			S->buflen -= BLAKE2B_BLOCKBYTES;
-			in += fill;
-			inlen -= fill;
-		}
-		else // inlen <= fill
-		{
-			clmemcpy( S->buf + left, in, inlen );
-			S->buflen += inlen; // Be lazy, do not compress
-			in += inlen;
-			inlen -= inlen;
-		}
-	}
-
-	return 0;
-}
-
-// Is this correct?
-int blake2b_final( __private blake2b_state *S, __private uchar *out )
-{
-	uchar buffer[BLAKE2B_OUTBYTES];
-
-	if( S->buflen > BLAKE2B_BLOCKBYTES )
-	{
-		blake2b_increment_counter( S, BLAKE2B_BLOCKBYTES );
-		blake2b_compress( S, S->buf );
-		S->buflen -= BLAKE2B_BLOCKBYTES;
-		clmemcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, S->buflen );
-	}
-
-	blake2b_increment_counter( S, S->buflen );
-	blake2b_set_lastblock( S );
-	clmemset( S->buf + S->buflen, 0, 2 * BLAKE2B_BLOCKBYTES - S->buflen ); // Padding
-	blake2b_compress( S, S->buf );
-
-	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
-		store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
-
-	clmemcpy( out, buffer, 32 );
-	return 0;
-}
-
 // inlen, at least, should be ulong. Others can be size_t.
 int blake2b( __private uchar *out, __private uchar *in )
 {
 	private blake2b_state S[1];
 
-	blake2b_init( S );
+	clmemset( S, 0, sizeof( blake2b_state ) );
+	for( int i = 0; i < 8; ++i ) S->h[i] = blake2b_IV[i];
+	S->h[0] ^= 0x0000000001010020UL;
 
-	blake2b_update( S, in, 80 );
-	blake2b_final( S, out );
+	ulong inlen = 80;
+	size_t left = S->buflen;
+	size_t fill = 2 * BLAKE2B_BLOCKBYTES - left;
+
+	if( inlen > fill )
+	{
+		clmemcpy( S->buf + left, in, fill ); // Fill buffer
+		S->buflen += fill;
+		blake2b_compress( S, S->buf ); // Compress
+		clmemcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, BLAKE2B_BLOCKBYTES ); // Shift buffer left
+		S->buflen -= BLAKE2B_BLOCKBYTES;
+	}
+	else // inlen <= fill
+	{
+		clmemcpy( S->buf + left, in, inlen );
+		S->buflen += inlen; // Be lazy, do not compress
+	}
+
+
+	S->t[0] += S->buflen;
+	S->f[0] = ~((ulong)0);
+	clmemset( S->buf + S->buflen, 0, 2 * BLAKE2B_BLOCKBYTES - S->buflen ); // Padding
+	blake2b_compress( S, S->buf );
+
+	uchar buffer[BLAKE2B_OUTBYTES];
+	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
+		store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
+
+	clmemcpy( out, buffer, 32 );
+
 	return 0;
 }
-
-#endif
