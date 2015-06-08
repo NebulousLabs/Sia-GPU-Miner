@@ -197,14 +197,14 @@ int main() {
 	kernel = clCreateKernel(program, "nonceGrind", &ret);
 
 	// Set OpenCL kernel arguments
-	ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&blockHeadermobj);
-	if (ret != CL_SUCCESS) { printf("failed to set first kernel arg: \n"); exit(1); }
-	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&headerHashmobj);
-	if (ret != CL_SUCCESS) { printf("failed to set fifth kernel arg: \n"); exit(1); }
-	ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&targmobj);
-	if (ret != CL_SUCCESS) { printf("failed to set third kernel arg: \n"); exit(1); }
-	ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&nonceOutmobj);
-	if (ret != CL_SUCCESS) { printf("failed to set second kernel arg: \n"); exit(1); }
+	void *args[] = { &blockHeadermobj, &headerHashmobj, &targmobj, &nonceOutmobj };
+	for (i = 0; i < 4; i++) {
+		ret = clSetKernelArg(kernel, i, sizeof(cl_mem), args[i]);
+		if (ret != CL_SUCCESS) {
+			printf("failed to set kernel arg %d (error code %d)\n", i, ret);
+			exit(1);
+		}
+	}
 
 	double hash_rate;
 	global_item_size = 256*256*16;
