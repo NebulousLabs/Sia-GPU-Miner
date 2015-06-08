@@ -19,6 +19,7 @@
 #endif
  
 #define MAX_SOURCE_SIZE (0x200000)
+#define CYCLES_PER_ITER 100
 
 cl_command_queue command_queue = NULL;
 cl_mem blockHeadermobj = NULL;
@@ -212,7 +213,7 @@ int main() {
 	double hash_rate;
 	global_item_size = 256*256*16;
 
-	// Make each iteration take about 3 seconds
+	// Make each iteration take about 1 second
 	#ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);
@@ -228,18 +229,16 @@ int main() {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= 0.015 / run_time_seconds;
+	global_item_size *= (1.0 / run_time_seconds) / CYCLES_PER_ITER;
 
 	// Grind nonces endlessly using
-	while (1) {
-		i++;
-		double temp = grindNonces(global_item_size);
-		while (temp == -1) {
-			// Repeat until no block is found
-			temp = grindNonces(global_item_size);
-		}
-		hash_rate = temp;
-		if (i % 15 == 0) {
+	for (i = 0; ; i++) {
+		// Repeat until no block is found
+		do {
+			hash_rate = grindNonces(global_item_size);
+		} while (hash_rate == -1);
+
+		if (i % CYCLES_PER_ITER == 0) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);
 		}
