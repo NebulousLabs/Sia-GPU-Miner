@@ -114,7 +114,7 @@ double grindNonces(size_t global_item_size) {
 	return hash_rate;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
@@ -123,13 +123,15 @@ int main(int argc, char* argv[]) {
 	cl_uint ret_num_platforms;
 
 	int i, c, cycles_per_iter;
+	char *port_number;
 	double hash_rate, seconds_per_iter;
 	size_t global_item_size = 256*256*16;
 
 	// parse args
 	cycles_per_iter = 15;
 	seconds_per_iter = 1.0;
-	while ( (c = getopt(argc, argv, "c:s:")) != -1) {
+	port_number = "9980";
+	while ( (c = getopt(argc, argv, "c:s:p:")) != -1) {
 		switch (c) {
 		case 'c':
 			sscanf(optarg, "%d", &cycles_per_iter);
@@ -137,8 +139,14 @@ int main(int argc, char* argv[]) {
 		case 's':
 			sscanf(optarg, "%lf", &seconds_per_iter);
 			break;
+		case 'p':
+			port_number = strdup(optarg);
+			break;
 		}
 	}
+
+	// Set siad URL
+	set_port(port_number);
 
 	// Use curl to communicate with siad
 	curl = curl_easy_init();

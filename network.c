@@ -9,6 +9,15 @@ struct inData {
 	size_t len;
 };
 
+char *bfw_url, *submit_url;
+
+void set_port(char *port) {
+	bfw_url = malloc(29 + strlen(port));
+	submit_url = malloc(28 + strlen(port));
+	sprintf(bfw_url, "localhost:%s/miner/blockforwork", port);
+	sprintf(submit_url, "localhost:%s/miner/submitblock", port);
+}
+
 // Write network data to an array of bytes
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	if (in == NULL)
@@ -36,7 +45,7 @@ int get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **b
 
 	// Get data from siad
 	curl_easy_reset(curl);
-	curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/blockforwork");
+	curl_easy_setopt(curl, CURLOPT_URL, bfw_url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
 
@@ -67,7 +76,7 @@ void submit_block(CURL *curl, uint8_t *block, size_t blocklen) {
 		curl_off_t numBytes = blocklen;
 
 		curl_easy_reset(curl);
-		curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/submitblock");
+		curl_easy_setopt(curl, CURLOPT_URL, submit_url);
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, numBytes);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, block);
