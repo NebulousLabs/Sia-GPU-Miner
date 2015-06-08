@@ -144,6 +144,8 @@ int main(int argc, char* argv[]) {
 	curl = curl_easy_init();
 
 	// Load kernel source file
+	printf("Initializing...");
+	fflush(stdout);
 	FILE *fp;
 	const char fileName[] = "./gpu-miner.cl";
 	size_t source_size;
