@@ -68,7 +68,9 @@ double grindNonces(size_t global_item_size) {
 	size_t blocklen = 0;
 
 	// Get new block header and target
-	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
+	if (get_block_for_work(curl, target, blockHeader, &block, &blocklen) != 0) {
+		return 0;
+	}
 
 	// Copy input data to the memory buffer
 	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
@@ -94,24 +96,22 @@ double grindNonces(size_t global_item_size) {
 	if (memcmp(headerHash, target, 8) < 0) {
 		// Copy nonce to block
 		memcpy(block+32, nonceOut, 8);
-
 		submit_block(curl, block, blocklen);
 		blocks_mined++;
-	} else {
-		// Hashrate is inaccurate if a block was found
-		#ifdef __linux__
-		clock_gettime(CLOCK_REALTIME, &end);
-
-		double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-		double run_time_seconds = nanosecondsElapsed * 1e-9;
-		#else
-		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-		#endif
-		double hash_rate = global_item_size / (run_time_seconds*1000000);
-		// TODO: Print est time until next block (target difficulty / hashrate
-		return hash_rate;
+		return -1;
 	}
-	return -1;
+
+	// Hashrate is inaccurate if a block was found
+	#ifdef __linux__
+	clock_gettime(CLOCK_REALTIME, &end);
+	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+	double run_time_seconds = nanosecondsElapsed * 1e-9;
+	#else
+	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+	#endif
+	double hash_rate = global_item_size / (run_time_seconds*1000000);
+	// TODO: Print est time until next block (target difficulty / hashrate)
+	return hash_rate;
 }
 
 int main(int argc, char* argv[]) {
@@ -228,6 +228,7 @@ int main(int argc, char* argv[]) {
 			exit(1);
 		}
 	}
+	printf("\n");
 
 	// Make each iteration take about 1 second
 	#ifdef __linux__

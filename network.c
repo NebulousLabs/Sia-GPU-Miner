@@ -25,39 +25,40 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	return size*nmemb;
 }
 
-void get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **block, size_t *blocklen) {
-	if (curl) {
-		CURLcode res;
-		struct inData in;
-
-		// Get data from siad
-		curl_easy_reset(curl);
-		curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/blockforwork");
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
-
-		res = curl_easy_perform(curl);
-		if(res != CURLE_OK) {
-			fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-			fprintf(stderr, "Are you sure that siad is running?\n");
-			exit(1);
-		}
-		if (in.len < 152) {
-			printf("curl did not receive enough bytes\n");
-			exit(1);
-		}
-
-		// Copy data to return
-		*blocklen = in.len - 112;
-		*block = (uint8_t*)malloc(*blocklen);
-		memcpy(target, in.bytes,     32);
-		memcpy(header, in.bytes+32,  80);
-		memcpy(*block, in.bytes+112, in.len-112);
-
-	} else {
-		printf("Invalid curl object passed to get_block_for_work()\n");
+int get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **block, size_t *blocklen) {
+	if (!curl) {
+		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
 		exit(1);
 	}
+
+	CURLcode res;
+	struct inData in;
+
+	// Get data from siad
+	curl_easy_reset(curl);
+	curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/blockforwork");
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+
+	res = curl_easy_perform(curl);
+	if(res != CURLE_OK) {
+		fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		fprintf(stderr, "Are you sure that siad is running?\n");
+		exit(1);
+	}
+	if (in.len < 174) {
+		fprintf(stderr, "curl did not receive enough bytes (got %zu, expected at least 174)\n", in.len);
+		return 1;
+	}
+
+	// Copy data to return
+	*blocklen = in.len - 112;
+	*block = (uint8_t*)malloc(*blocklen);
+	memcpy(target, in.bytes,     32);
+	memcpy(header, in.bytes+32,  80);
+	memcpy(*block, in.bytes+112, in.len-112);
+
+	return 0;
 }
 
 void submit_block(CURL *curl, uint8_t *block, size_t blocklen) {
