@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include "network.h"
  
@@ -20,7 +21,6 @@
 #endif
  
 #define MAX_SOURCE_SIZE (0x200000)
-#define CYCLES_PER_ITER 100
 
 cl_command_queue command_queue = NULL;
 cl_mem blockHeadermobj = NULL;
@@ -114,7 +114,7 @@ double grindNonces(size_t global_item_size) {
 	return -1;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
@@ -122,8 +122,23 @@ int main() {
 	cl_uint ret_num_devices;
 	cl_uint ret_num_platforms;
 
-	int i;
-	size_t global_item_size = 1;
+	int i, c, cycles_per_iter;
+	double hash_rate, seconds_per_iter;
+	size_t global_item_size = 256*256*16;
+
+	// parse args
+	cycles_per_iter = 15;
+	seconds_per_iter = 1.0;
+	while ( (c = getopt(argc, argv, "c:s:")) != -1) {
+		switch (c) {
+		case 'c':
+			sscanf(optarg, "%d", &cycles_per_iter);
+			break;
+		case 's':
+			sscanf(optarg, "%lf", &seconds_per_iter);
+			break;
+		}
+	}
 
 	// Use curl to communicate with siad
 	curl = curl_easy_init();
@@ -212,9 +227,6 @@ int main() {
 		}
 	}
 
-	double hash_rate;
-	global_item_size = 256*256*16;
-
 	// Make each iteration take about 1 second
 	#ifdef __linux__
 	struct timespec begin, end;
@@ -231,12 +243,12 @@ int main() {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= (1.0 / run_time_seconds) / CYCLES_PER_ITER;
+	global_item_size *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
 
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while (!quit) {
-		for (i = 0; i < CYCLES_PER_ITER; i++) {
+		for (i = 0; i < cycles_per_iter; i++) {
 			// Repeat until no block is found
 			do {
 				hash_rate = grindNonces(global_item_size);
