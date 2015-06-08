@@ -16,7 +16,7 @@
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
-#include <CL/cl.h>  
+#include <CL/cl.h>
 #endif
  
 #define MAX_SOURCE_SIZE (0x200000)
@@ -35,7 +35,7 @@ CURL *curl;
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
 
-void quitSignal(int __unused) {	quit = 1; }
+void quitSignal(int __unused) { quit = 1; }
 
 // Perform global_item_size * iter_per_thread hashes
 // Return -1 if a block is found
@@ -111,14 +111,14 @@ double grindNonces(size_t global_item_size) {
 	return -1;
 }
 
-int main() {   
+int main() {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
 	cl_program program = NULL;
 	cl_uint ret_num_devices;
 	cl_uint ret_num_platforms;
- 
+
 	int i;
 	size_t global_item_size = 1;
 
@@ -243,7 +243,7 @@ int main() {
 		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 		fflush(stdout);
 	}
-	
+
 	// Finalization
 	printf("\nCaught deadly signal, quitting...\n");
 	ret = clFlush(command_queue);   
@@ -256,10 +256,10 @@ int main() {
 	ret = clReleaseMemObject(nonceOutmobj);
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);	
- 
- 	curl_easy_cleanup(curl);
- 	
+
+	curl_easy_cleanup(curl);
+
 	free(source_str);
- 
+
 	return 0;
 }

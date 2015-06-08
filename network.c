@@ -35,7 +35,7 @@ void get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **
 		curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/blockforwork");
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
- 
+
 		res = curl_easy_perform(curl);
 		if(res != CURLE_OK) {
 			fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
