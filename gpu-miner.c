@@ -227,17 +227,17 @@ int main() {
 	#endif
 	global_item_size *= (1.0 / run_time_seconds) / CYCLES_PER_ITER;
 
-	// Grind nonces endlessly using
-	for (i = 0; ; i++) {
-		// Repeat until no block is found
-		do {
-			hash_rate = grindNonces(global_item_size);
-		} while (hash_rate == -1);
-
-		if (i % CYCLES_PER_ITER == 0) {
-			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
-			fflush(stdout);
+	// Grind nonces endlessly
+	while (1) {
+		for (i = 0; i < CYCLES_PER_ITER; i++) {
+			// Repeat until no block is found
+			do {
+				hash_rate = grindNonces(global_item_size);
+			} while (hash_rate == -1);
 		}
+
+		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+		fflush(stdout);
 	}
 	
 	// Finalization
