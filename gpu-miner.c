@@ -35,7 +35,10 @@ CURL *curl;
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
 
-void quitSignal(int __unused) { quit = 1; }
+void quitSignal(int __unused) {
+	quit = 1;
+	printf("\nCaught deadly signal, quitting...\n");
+}
 
 // Perform global_item_size * iter_per_thread hashes
 // Return -1 if a block is found
@@ -240,12 +243,13 @@ int main() {
 			} while (hash_rate == -1);
 		}
 
-		printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
-		fflush(stdout);
+		if (!quit) {
+			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
+			fflush(stdout);
+		}
 	}
 
 	// Finalization
-	printf("\nCaught deadly signal, quitting...\n");
 	ret = clFlush(command_queue);   
 	ret = clFinish(command_queue);
 	ret = clReleaseKernel(kernel);
