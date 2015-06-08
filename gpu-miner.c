@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 #include "network.h"
  
@@ -32,7 +33,9 @@ cl_int ret;
 CURL *curl;
 
 unsigned int blocks_mined = 0;
+static volatile int quit = 0;
 
+void quitSignal(int __unused) {	quit = 1; }
 
 // Perform global_item_size * iter_per_thread hashes
 // Return -1 if a block is found
@@ -227,8 +230,9 @@ int main() {
 	#endif
 	global_item_size *= (1.0 / run_time_seconds) / CYCLES_PER_ITER;
 
-	// Grind nonces endlessly
-	while (1) {
+	// Grind nonces until SIGINT
+	signal(SIGINT, quitSignal);
+	while (!quit) {
 		for (i = 0; i < CYCLES_PER_ITER; i++) {
 			// Repeat until no block is found
 			do {
@@ -241,6 +245,7 @@ int main() {
 	}
 	
 	// Finalization
+	printf("\nCaught deadly signal, quitting...\n");
 	ret = clFlush(command_queue);   
 	ret = clFinish(command_queue);
 	ret = clReleaseKernel(kernel);
