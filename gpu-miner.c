@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "network.h"
  
@@ -89,9 +90,7 @@ double grindNonces(size_t global_item_size) {
 	}
 	if (headerHash[i] < target[i]) {
 		// Copy nonce to block
-		for (i = 0; i < 8; i++) {
-			block[i + 32] = nonceOut[i];
-		}
+		memcpy(block+32, nonceOut, 8);
 
 		submit_block(curl, block, blocklen);
 		blocks_mined++;

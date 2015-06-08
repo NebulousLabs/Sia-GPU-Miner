@@ -48,15 +48,11 @@ void get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **
 		}
 
 		// Copy data to return
-		int i;
 		*blocklen = in.len - 112;
 		*block = (uint8_t*)malloc(*blocklen);
-		for (i = 0; i < 32; i++)
-			target[i] = in.bytes[i];
-		for (i = 0; i < 80; i++)
-			header[i] = in.bytes[i + 32];
-		for (i = 0; i < in.len - 112; i++)
-			(*block)[i] = in.bytes[i + 112];
+		memcpy(target, in.bytes,     32);
+		memcpy(header, in.bytes+32,  80);
+		memcpy(*block, in.bytes+112, in.len-112);
 
 	} else {
 		printf("Invalid curl object passed to get_block_for_work()\n");
