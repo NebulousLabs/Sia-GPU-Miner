@@ -73,21 +73,29 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)$(Configuration)\$(PlatformTarget)\</OutDir>
     <IntDir>$(SolutionDir)$(Configuration)\temp\$(PlatformTarget)\</IntDir>
+    <IncludePath>$(VC_IncludePath);$(SolutionDir)\deps\include;$(WindowsSDK_IncludePath);</IncludePath>
+    <LibraryPath>$(SolutionDir)\deps\lib\x64\Release;$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)$(Configuration)\$(PlatformTarget)\</OutDir>
     <IntDir>$(SolutionDir)$(Configuration)\temp\$(PlatformTarget)\</IntDir>
+    <IncludePath>$(VC_IncludePath);$(SolutionDir)\deps\include;$(WindowsSDK_IncludePath);</IncludePath>
+    <LibraryPath>$(SolutionDir)\deps\lib\x64\Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)$(Configuration)\$(PlatformTarget)\</OutDir>
     <IntDir>$(SolutionDir)$(Configuration)\temp\$(PlatformTarget)\</IntDir>
+    <IncludePath>$(VC_IncludePath);$(SolutionDir)\deps\include;$(WindowsSDK_IncludePath);</IncludePath>
+    <LibraryPath>$(SolutionDir)\deps\lib\x64\Release;$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86);</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)$(Configuration)\$(PlatformTarget)\</OutDir>
     <IntDir>$(SolutionDir)$(Configuration)\temp\$(PlatformTarget)\</IntDir>
+    <IncludePath>$(VC_IncludePath);$(SolutionDir)\deps\include;$(WindowsSDK_IncludePath);</IncludePath>
+    <LibraryPath>$(SolutionDir)\deps\lib\x64\Release;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -198,7 +206,7 @@
     <ClCompile Include="..\network.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="..\gpu-miner.cu">
+    <CudaCompile Include="..\gpu-cuda-miner.cu">
       <FileType>Document</FileType>
     </CudaCompile>
   </ItemGroup>

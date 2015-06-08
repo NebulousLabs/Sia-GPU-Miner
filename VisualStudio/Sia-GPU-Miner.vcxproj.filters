@@ -28,7 +28,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="..\gpu-miner.cu">
+    <CudaCompile Include="..\gpu-cuda-miner.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
   </ItemGroup>
