@@ -85,11 +85,7 @@ double grindNonces(size_t global_item_size) {
 	if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
 
 	// Did we find one?
-	i = 0;
-	while (target[i] == headerHash[i]) {
-		i++;
-	}
-	if (headerHash[i] < target[i]) {
+	if (memcmp(headerHash, target, 8) < 0) {
 		// Copy nonce to block
 		memcpy(block+32, nonceOut, 8);
 
