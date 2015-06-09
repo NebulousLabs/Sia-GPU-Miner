@@ -103,11 +103,11 @@ double grindNonces(size_t global_item_size)
 	cudaDeviceSynchronize();
 	// Did we find one?
 	i = 0;
-	while(target[i] == headerHash[i])
+	while(target[i] == headerHash[i] && i<32)
 	{
 		i++;
 	}
-	if(headerHash[i] < target[i])
+	if(headerHash[i] < target[i] || i==32)
 	{
 		// Copy nonce to block
 		for(i = 0; i < 8; i++)
