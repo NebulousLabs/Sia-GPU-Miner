@@ -4,12 +4,22 @@
 #include <sys/time.h>
 #endif
 
+#ifdef _MSC_VER
+extern "C" {
+	int getopt(int, char * const *, const char *);
+	extern char *optarg;
+}
+#endif
+
 #include <ctime>
 #include <cstdio>
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <cstring>
 using namespace std;
+#include <signal.h>
+//#include <unistd.h>
 #include <cuda_runtime.h>
 
 #include "network.h"
@@ -26,12 +36,36 @@ cudaStream_t cudastream;
 CURL *curl;
 
 unsigned int blocks_mined = 0;
+static volatile int quit = 0;
+bool target_corrupt_flag = false;
 
+void quitSignal(int __unused)
+{
+	quit = 1;
+	printf("\nCaught deadly signal, quitting...\n");
+}
+
+#if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
+#define WANT_BUILTIN_BSWAP
+#endif
+
+static inline uint32_t swap32(uint32_t x)
+{
+#ifdef WANT_BUILTIN_BSWAP
+	return __builtin_bswap32(x);
+#else
+#ifdef _MSC_VER
+	return _byteswap_ulong(x);
+#else
+	return ((((x) << 24) & 0xff000000u) | (((x) << 8) & 0x00ff0000u) | (((x) >> 8) & 0x0000ff00u) | (((x) >> 24) & 0x000000ffu));
+#endif
+#endif
+}
 
 // Perform global_item_size * iter_per_thread hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
-double grindNonces(size_t global_item_size)
+double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 {
 	// Start timing this iteration
 #ifdef __linux__
@@ -43,24 +77,48 @@ double grindNonces(size_t global_item_size)
 
 	uint8_t blockHeader[80];
 	uint8_t headerHash[32];
-	uint8_t target[32];
+	uint32_t target[8];
 	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
 
 	int i;
-	for(i = 0; i < 8; i++)
-	{
-		nonceOut[i] = 0;
-		headerHash[i] = 255;
-	}
+	memset(nonceOut, 0, 8);
+	memset(headerHash, 255, 32);
+	memset(target, 255, 32);
 
 	// Store block from siad
 	uint8_t *block;
 	size_t blocklen = 0;
 
 	// Get new block header and target
-	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
+	if(get_block_for_work(curl, (uint8_t*)target, blockHeader, &block, &blocklen) != 0)
+	{
+		return 0;
+	}
+	/*
+	// Check for target corruption
+	if(target[0] != 0)
+	{
+		if(target_corrupt_flag)
+		{
+			return -1;
+		}
+		target_corrupt_flag = true;
+		printf("\nReceived corrupt target from Sia\n");
+		printf("%08x %08x %08x %08x %08x %08x %08x %08x \n", swap32(target[0]), swap32(target[1]), swap32(target[2]), swap32(target[3]), swap32(target[4]), swap32(target[5]), swap32(target[6]), swap32(target[7]));
+		printf("Usually this resolves itself within a minute or so\n");
+		printf("If it happens frequently trying increasing seconds per iteration\n");
+		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
+		printf("Waiting for problem to be resolved...");
+		fflush(stdout);
+		return -1;
+	}*/
+	target_corrupt_flag = 0;
 
-	// Copy input data to the memory buffer
+	for(i = 0; i < cycles_per_iter; i++)
+	{
+		blockHeader[38] = i / 256;
+		blockHeader[39] = i % 256;
+		// Copy input data to the memory buffer
 	ret = cudaMemcpyAsync(blockHeadermobj, blockHeader, 80, cudaMemcpyHostToDevice, cudastream);
 	if(ret != cudaSuccess)
 	{
@@ -78,11 +136,11 @@ double grindNonces(size_t global_item_size)
 	}
 
 	// Execute OpenCL kernel as data parallel
-	size_t local_item_size = 256;
-	global_item_size -= global_item_size % 256;
+	uint32_t local_item_size = 256;
+	items_per_iter -= items_per_iter % 256;
 
 	extern void nonceGrindcuda(cudaStream_t, int, int, char *, char *, char *, char *);
-	nonceGrindcuda(cudastream, global_item_size, local_item_size, blockHeadermobj, headerHashmobj, targmobj, nonceOutmobj);
+	nonceGrindcuda(cudastream, items_per_iter, local_item_size, blockHeadermobj, headerHashmobj, targmobj, nonceOutmobj);
 	ret = cudaGetLastError();
 	if(ret != cudaSuccess)
 	{
@@ -102,47 +160,79 @@ double grindNonces(size_t global_item_size)
 	}
 	cudaDeviceSynchronize();
 	// Did we find one?
-	i = 0;
-	while(target[i] == headerHash[i] && i<32)
-	{
-		i++;
-	}
-	if(headerHash[i] < target[i] || i==32)
+	// Did we find one?
+	if(memcmp(headerHash, target, 8) < 0)
 	{
 		// Copy nonce to block
-		for(i = 0; i < 8; i++)
-		{
-			block[i + 32] = nonceOut[i];
-		}
-
+		memcpy(block + 32, nonceOut, 8);
 		submit_block(curl, block, blocklen);
 		blocks_mined++;
+		return -1;
 	}
-	else
-	{
-		// Hashrate is inaccurate if a block was found
+	}
+	free(block);
+	// Hashrate is inaccurate if a block was found
 #ifdef __linux__
-		clock_gettime(CLOCK_REALTIME, &end);
-
-		double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-		double run_time_seconds = nanosecondsElapsed * 1e-9;
+	clock_gettime(CLOCK_REALTIME, &end);
+	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+	double run_time_seconds = nanosecondsElapsed * 1e-9;
 #else
-		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 #endif
-		double hash_rate = global_item_size / (run_time_seconds * 1000000);
-		// TODO: Print est time until next block (target difficulty / hashrate
-		return hash_rate;
-	}
-	return -1;
+	double hash_rate = cycles_per_iter * items_per_iter / (run_time_seconds * 1000000);
+
+	return hash_rate;
 }
 
-int main()
+int main(int argc, char *argv[])
 {
-	int i;
-	size_t global_item_size = 1;
+	int i, c, cycles_per_iter;
+	char *port_number;
+	double hash_rate, seconds_per_iter;
+	uint32_t items_per_iter = 256 * 256 * 1;
+	// parse args
+	cycles_per_iter = 16;
+	seconds_per_iter = 2.0;
+	port_number = "9980";
+	while((c = getopt(argc, argv, "hc:s:p:")) != -1)
+	{
+		switch(c)
+		{
+		case 'h':
+			printf("\nUsage:\n\n");
+			printf("\t c - cycles per iter: Number of workloads hashing gets split into each iteration\n");
+			printf("\t default: %f\n", cycles_per_iter);
+			printf("\t\tIncrease this if your computer is freezing or locking up\n");
+			printf("\n");
+			printf("\t s - seconds per iter: Time between Sia API calls and hash rate updates\n");
+			printf("\t default: %f\n", seconds_per_iter);
+			printf("\t\tIncrease this if your miner is receiving invalid targets\n");
+			printf("\n");
+			exit(0);
+			break;
+		case 'c':
+			sscanf(optarg, "%d", &cycles_per_iter);
+			if(cycles_per_iter < 1 || cycles_per_iter > 1000)
+			{
+				printf("Cycles per iter must be at least 1 and no more than 1000\n");
+				exit(1);
+			}
+			break;
+		case 's':
+			sscanf(optarg, "%lf", &seconds_per_iter);
+			break;
+		case 'p':
+			port_number = strdup(optarg);
+			break;
+		}
+	}
+
+	// Set siad URL
+	set_port(port_number);
 
 	// Use curl to communicate with siad
 	curl = curl_easy_init();
+	printf("\nInitializing...\n");
 
 	int deviceCount;
 	ret = cudaGetDeviceCount(&deviceCount);
@@ -195,17 +285,14 @@ int main()
 		printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1);
 	}
 
-	double hash_rate;
-	global_item_size = 256 * 256*8;
-
-	// Make each iteration take about 3 seconds
+	// Make each iteration take about 1 second
 #ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);
 #else
 	clock_t startTime = clock();
 #endif
-	grindNonces(global_item_size);
+	grindNonces(items_per_iter, 1);
 #ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
 
@@ -214,20 +301,19 @@ int main()
 #else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 #endif
-	global_item_size *= 0.015 / run_time_seconds;
+	items_per_iter *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
 
-	// Grind nonces endlessly using
-	while(1)
+	// Grind nonces until SIGINT
+	signal(SIGINT, quitSignal);
+	while(!quit)
 	{
-		i++;
-		double temp = grindNonces(global_item_size);
-		while(temp == -1)
+		// Repeat until no block is found
+		do
 		{
-			// Repeat until no block is found
-			temp = grindNonces(global_item_size);
-		}
-		hash_rate = temp;
-		if(i % 15 == 0)
+			hash_rate = grindNonces(items_per_iter, cycles_per_iter);
+		} while(hash_rate == -1);
+
+		if(!quit)
 		{
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);

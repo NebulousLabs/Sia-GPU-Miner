@@ -12,17 +12,17 @@ struct inData {
 char *bfw_url, *submit_url;
 
 void set_port(char *port) {
-	bfw_url = malloc(29 + strlen(port));
-	submit_url = malloc(28 + strlen(port));
+	bfw_url = (char*)malloc(29 + strlen(port));
+	submit_url = (char*)malloc(28 + strlen(port));
 	sprintf(bfw_url, "localhost:%s/miner/blockforwork", port);
 	sprintf(submit_url, "localhost:%s/miner/submitblock", port);
 }
 
 // Write network data to an array of bytes
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
-	if (in == NULL)
-		return size*nmemb;
 	size_t new_len = size*nmemb;
+	if(in == NULL || new_len == 0)
+		return new_len;
 	in->bytes = (uint8_t*)malloc(new_len);
 	if (in->bytes == NULL) {
 		fprintf(stderr, "malloc() failed\n");
