@@ -34,6 +34,7 @@ CURL *curl;
 
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
+int target_corrupt_flag = 0;
 
 void quitSignal(int __unused) {
 	quit = 1;
@@ -70,6 +71,22 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	if (get_block_for_work(curl, target, blockHeader, &block, &blocklen) != 0) {
 		return 0;
 	}
+
+	// Check for target corruption
+	if (target[0] != 0 || target[1] != 0 || target[2] != 0 || target[3] != 0) {
+		if (target_corrupt_flag) {
+			return -1;
+		}
+		target_corrupt_flag = 1;
+		printf("Received corrupt target from Sia\n");
+		printf("Usually this resolves itself within a minute or so\n");
+		printf("If it happens frequently trying increasing seconds per iteration\n");
+		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
+		printf("Waiting for problem to be resolved...");
+		fflush(stdout);
+		return -1;
+	}
+	target_corrupt_flag = 0;
 
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
