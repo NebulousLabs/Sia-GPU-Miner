@@ -57,11 +57,9 @@ double grindNonces(size_t global_item_size) {
 	uint8_t target[32];
 	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
 
-	int i;
-	for (i = 0; i < 8; i++) {
-		nonceOut[i] = 0;
-		headerHash[i] = 255;
-	}
+	memset(nonceOut, 0, 8);
+	memset(headerHash, 255, 32);
+	memset(target, 255, 32);
 
 	// Store block from siad
 	uint8_t *block;
