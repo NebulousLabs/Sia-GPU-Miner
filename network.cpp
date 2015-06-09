@@ -9,6 +9,15 @@ struct inData {
 	size_t len;
 };
 
+char *bfw_url, *submit_url;
+
+void set_port(char *port) {
+	bfw_url = malloc(29 + strlen(port));
+	submit_url = malloc(28 + strlen(port));
+	sprintf(bfw_url, "localhost:%s/miner/blockforwork", port);
+	sprintf(submit_url, "localhost:%s/miner/submitblock", port);
+}
+
 // Write network data to an array of bytes
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	if (in == NULL)
@@ -25,43 +34,40 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	return size*nmemb;
 }
 
-void get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **block, size_t *blocklen) {
-	if (curl) {
-		CURLcode res;
-		struct inData in;
-
-		// Get data from siad
-		curl_easy_reset(curl);
-		curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/blockforwork");
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
- 
-		res = curl_easy_perform(curl);
-		if(res != CURLE_OK) {
-			fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-			fprintf(stderr, "Are you sure that siad is running?\n");
-			exit(1);
-		}
-		if (in.len < 152) {
-			printf("curl did not receive enough bytes\n");
-			exit(1);
-		}
-
-		// Copy data to return
-		int i;
-		*blocklen = in.len - 112;
-		*block = (uint8_t*)malloc(*blocklen);
-		for (i = 0; i < 32; i++)
-			target[i] = in.bytes[i];
-		for (i = 0; i < 80; i++)
-			header[i] = in.bytes[i + 32];
-		for (i = 0; i < in.len - 112; i++)
-			(*block)[i] = in.bytes[i + 112];
-
-	} else {
-		printf("Invalid curl object passed to get_block_for_work()\n");
+int get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **block, size_t *blocklen) {
+	if (!curl) {
+		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
 		exit(1);
 	}
+
+	CURLcode res;
+	struct inData in;
+
+	// Get data from siad
+	curl_easy_reset(curl);
+	curl_easy_setopt(curl, CURLOPT_URL, bfw_url);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+
+	res = curl_easy_perform(curl);
+	if(res != CURLE_OK) {
+		fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		fprintf(stderr, "Are you sure that siad is running?\n");
+		exit(1);
+	}
+	if (in.len < 174) {
+		fprintf(stderr, "curl did not receive enough bytes (got %zu, expected at least 174)\n", in.len);
+		return 1;
+	}
+
+	// Copy data to return
+	*blocklen = in.len - 112;
+	*block = (uint8_t*)malloc(*blocklen);
+	memcpy(target, in.bytes,     32);
+	memcpy(header, in.bytes+32,  80);
+	memcpy(*block, in.bytes+112, in.len-112);
+
+	return 0;
 }
 
 void submit_block(CURL *curl, uint8_t *block, size_t blocklen) {
@@ -70,7 +76,7 @@ void submit_block(CURL *curl, uint8_t *block, size_t blocklen) {
 		curl_off_t numBytes = blocklen;
 
 		curl_easy_reset(curl);
-		curl_easy_setopt(curl, CURLOPT_URL, "localhost:9980/miner/submitblock");
+		curl_easy_setopt(curl, CURLOPT_URL, submit_url);
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, numBytes);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, block);
