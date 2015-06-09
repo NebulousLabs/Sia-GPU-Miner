@@ -1,5 +1,3 @@
-int blake2b( uchar *out, uchar *in );
-
 // Implementations of clmemset and memcopy
 void *clmemset( __private void *s, __private int c, __private size_t n) {
 	uchar *p = s;
@@ -73,17 +71,6 @@ __constant uchar blake2b_sigma[12][16] =
 	{	0,	1,	2,	3,	4,	5,	6,	7,	8,	9, 10, 11, 12, 13, 14, 15 } ,
 	{ 14, 10,	4,	8,	9, 15, 13,	6,	1, 12,	0,	2, 11,	7,	5,	3 }
 };
-
-static int blake2b_compress( __private blake2b_state *S, __private const uchar block[128] )
-{
-	return 0;
-}
-
-int blake2b( __private uchar *out, __private uchar *in )
-{
-
-	return 0;
-}
 
 // The kernel that grinds nonces until it finds a hash below the target
 __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
