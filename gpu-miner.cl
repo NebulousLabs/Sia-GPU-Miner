@@ -1,31 +1,24 @@
-static inline ulong rotr64( __private const ulong w, __private const unsigned c )
+static inline ulong rotr64( __const ulong w, __const unsigned c )
 {
   return ( w >> c ) | ( w << ( 64 - c ) );
 }
 
 // The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targetIn, __global uchar *nonceOut) {
-	private uchar header[256] = {0};
-	private uchar target[32];
+__kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __global uint *targetIn, __global uchar *nonceOut) {
+	uchar header[256] = {0};
+	uchar target[32];
 
 	// Transfer inputs from global memory
 	int i;
-#pragma unroll
-	for (i = 0; i < 32; i++) {
-		target[i] = targetIn[i];
-		header[i] = headerIn[i];
+	for (i = 0; i < 8; i++) {
+		*(uint*)(target + i * 4) = targetIn[i];
 	}
-#pragma unroll
-	for (i = 32; i < 80; i++) {
-		header[i] = headerIn[i];
+	for (i = 0; i < 20; i++) {
+		*(uint*)(header + i * 4) = headerIn[i];
 	}
 
 	// Set nonce
-	private int id = get_global_id(0);
-	header[32] = id / (256 * 256 * 256);
-	header[33] = id / (256 * 256);
-	header[34] = id / 256;
-	header[35] = id % 256;
+	*(uint*)(header + 32) = get_global_id(0);
 
 	uchar blake2b_sigma[12][16] =
 	{
@@ -92,7 +85,7 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	ROUND( 9 );
 	ROUND( 10 );
 	ROUND( 11 );
-	private uchar headerHash[64];
+	uchar headerHash[64];
 	for( i = 0; i < 8; ++i )
 		iv[i] = iv[i] ^ v[i] ^ v[i + 8];
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
@@ -102,18 +95,16 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 #undef G
 #undef ROUND
 
-	// Compare header to target
-	int z = 0;
-	while (target[z] == headerHash[z]) {
-		z++;
+	// Compare hash to target
+	i = 0;
+	while (target[i] == headerHash[i]) {
+		i++;
 	}
-	if (headerHash[z] < target[z]) {
+	if (headerHash[i] < target[i]) {
 		// Transfer the output to global space.
-#pragma unroll
 		for (i = 0; i < 8; i++) {
 			nonceOut[i] = header[i + 32];
 		}
-#pragma unroll
 		for (i = 0; i < 32; i++) {
 			hashOut[i] = headerHash[i];
 		}
