@@ -1,12 +1,3 @@
-// Implementations of clmemset and memcopy
-void *clmemset( __private void *s, __private int c, __private size_t n) {
-	uchar *p = s;
-	while(n--) {
-		*p++ = (uchar)c;
-	}
-	return s;
-}
-
 void clmemcpy( __private void *dest, __private const void *src, __private size_t num) {
 	int i = 0 ;
 	char *dest8 = (char*)dest;
@@ -23,14 +14,6 @@ void clmemcpy( __private void *dest, __private const void *src, __private size_t
 #define ALIGN(x) __attribute__((aligned(x)))
 #endif
 
-  typedef struct __blake2b_state
-  {
-	ulong h[8];
-	ulong t[2];
-	ulong f[2];
-	uchar  buf[256];
-	uchar  last_node;
-  } blake2b_state;
 
 static inline ulong load64( __private const void *src )
 {
@@ -73,16 +56,16 @@ __constant uchar blake2b_sigma[12][16] =
 };
 
 // The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
+__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targetIn, __global uchar *nonceOut) {
 	private uchar header[256] = {0};
-	private uchar headerHash[32];
+	private uchar headerHash[64];
 	private uchar target[32];
 	headerHash[0] = 255;
 
 	int i;
 #pragma unroll
 	for (i = 0; i < 32; i++) {
-		target[i] = targ[i];
+		target[i] = targetIn[i];
 		header[i] = headerIn[i];
 	}
 #pragma unroll
@@ -98,16 +81,13 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	header[34] = id / 256;
 	header[35] = id % 256;
 
-	// Hash the header
-	// blake2b(headerHash, header);
-	// Initialize a state.
-	private blake2b_state S[1];
-	clmemset( S, 0, sizeof( blake2b_state ) );
-	for( int i = 0; i < 8; ++i ) S->h[i] = blake2b_IV[i];
-	S->h[0] ^= 0x0000000001010020UL;
-
-	S->t[0] += 80;
-	S->f[0] = ~((ulong)0);
+	// BLAKE2B START
+	ulong h[8] = {0};
+	ulong t[2] = {80, 0};
+	ulong f[2] = {0};
+	for( int i = 0; i < 8; ++i ) h[i] = blake2b_IV[i];
+	h[0] ^= 0x0000000001010020UL;
+	f[0] = ~((ulong)0);
 
 	ulong m[16];
 	ulong v[16];
@@ -116,16 +96,16 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 		m[i] = load64( header + i * sizeof( m[i] ) );
 
 	for( i = 0; i < 8; ++i )
-		v[i] = S->h[i];
+		v[i] = h[i];
 
 	v[ 8] = blake2b_IV[0];
 	v[ 9] = blake2b_IV[1];
 	v[10] = blake2b_IV[2];
 	v[11] = blake2b_IV[3];
-	v[12] = S->t[0] ^ blake2b_IV[4];
-	v[13] = S->t[1] ^ blake2b_IV[5];
-	v[14] = S->f[0] ^ blake2b_IV[6];
-	v[15] = S->f[1] ^ blake2b_IV[7];
+	v[12] = t[0] ^ blake2b_IV[4];
+	v[13] = t[1] ^ blake2b_IV[5];
+	v[14] = f[0] ^ blake2b_IV[6];
+	v[15] = f[1] ^ blake2b_IV[7];
 #define G(r,i,a,b,c,d) \
 	do { \
 		a = a + b + m[blake2b_sigma[r][2*i+0]]; \
@@ -162,16 +142,14 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	ROUND( 11 );
 
 	for( i = 0; i < 8; ++i )
-		S->h[i] = S->h[i] ^ v[i] ^ v[i + 8];
+		h[i] = h[i] ^ v[i] ^ v[i + 8];
 
 #undef G
 #undef ROUND
 
-	uchar buffer[64];
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
-		store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
-
-	clmemcpy( headerHash, buffer, 32 );
+		store64( headerHash + sizeof( h[i] ) * i, h[i] );
+	// BLAKE2B END
 
 	// Compare header to target
 	int z = 0;
@@ -180,9 +158,11 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	}
 	if (headerHash[z] < target[z]) {
 		// Transfer the output to global space.
+#pragma unroll
 		for (i = 0; i < 8; i++) {
 			nonceOut[i] = header[i + 32];
 		}
+#pragma unroll
 		for (i = 0; i < 32; i++) {
 			hashOut[i] = headerHash[i];
 		}
