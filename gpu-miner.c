@@ -63,12 +63,8 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	memset(headerHash, 255, 32);
 	memset(target, 255, 32);
 
-	// Store block from siad
-	uint8_t *block;
-	size_t blocklen = 0;
-
 	// Get new block header and target
-	if (get_block_for_work(curl, target, blockHeader, &block, &blocklen) != 0) {
+	if (get_header_for_work(curl, target, blockHeader) != 0) {
 		return 0;
 	}
 
@@ -84,7 +80,6 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
 		printf("Waiting for problem to be resolved...");
 		fflush(stdout);
-		return -1;
 	}
 	target_corrupt_flag = 0;
 
@@ -118,16 +113,13 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 
 		// Did we find one?
 		if (memcmp(headerHash, target, 8) < 0) {
-			// Copy nonce to block
-			memcpy(block+32, nonceOut, 8);
-			submit_block(curl, block, blocklen);
+			// Copy nonce to header.
+			memcpy(blockHeader+32, nonceOut, 8);
+			submit_header(curl, blockHeader);
 			blocks_mined++;
 			return -1;
 		}
 	}
-
-	// Free memory allocated in network.c
-	free(block);
 
 	// Hashrate is inaccurate if a block was found
 	#ifdef __linux__
