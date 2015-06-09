@@ -2,7 +2,7 @@ int blake2b( uchar *out, uchar *in );
 
 // The kernel that grinds nonces until it finds a hash below the target
 __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
-	private uchar header[256];
+	private uchar header[256] = {0};
 	private uchar headerHash[32];
 	private uchar target[32];
 	headerHash[0] = 255;
@@ -135,7 +135,6 @@ int blake2b( __private uchar *out, __private uchar *in )
 
 	S->t[0] += 80;
 	S->f[0] = ~((ulong)0);
-	clmemset( in + 80, 0, 2 * 128 - 80 ); // Padding
 
 	ulong m[16];
 	ulong v[16];
