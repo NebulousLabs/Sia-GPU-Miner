@@ -139,10 +139,24 @@ int main(int argc, char *argv[]) {
 	cycles_per_iter = 15;
 	seconds_per_iter = 1.0;
 	port_number = "9980";
-	while ( (c = getopt(argc, argv, "c:s:p:")) != -1) {
+	while ( (c = getopt(argc, argv, "hc:s:p:")) != -1) {
 		switch (c) {
+		case 'h':
+			printf("\nUsage:\n\n");
+			printf("\t c - cycles per iter: Number of workloads hashing gets split into each iteration\n");
+			printf("\t\tIncrease this if your computer is freezing or locking up\n");
+			printf("\n");
+			printf("\t s - seconds per iter: Time between Sia API calls and hash rate updates\n");
+			printf("\t\tIncrease this if your miner is receiving invalid targets\n");
+			printf("\n");
+			exit(0);
+			break;
 		case 'c':
 			sscanf(optarg, "%d", &cycles_per_iter);
+			if (cycles_per_iter < 1 || cycles_per_iter > 1000) {
+				printf("Cycles per iter must be at least 1 and no more than 1000\n");
+				exit(1);
+			}
 			break;
 		case 's':
 			sscanf(optarg, "%lf", &seconds_per_iter);
