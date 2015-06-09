@@ -122,10 +122,40 @@ __device__ static inline void store64(void *dst, uint64_t w)
 	*(uint64_t *)(dst) = w;
 }
 
-__device__ static inline uint64_t rotr64(const uint64_t w, const unsigned c)
+#if __CUDA_ARCH__ >= 320
+__device__ __forceinline__
+uint64_t rotr64(const uint64_t value, const int offset)
 {
-	return (w >> c) | (w << (64 - c));
+	uint2 result;
+	if(offset < 32)
+	{
+		asm("shf.r.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(__double2loint(__longlong_as_double(value))), "r"(__double2hiint(__longlong_as_double(value))), "r"(offset));
+		asm("shf.r.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(__double2hiint(__longlong_as_double(value))), "r"(__double2loint(__longlong_as_double(value))), "r"(offset));
+	}
+	else
+	{
+		asm("shf.r.wrap.b32 %0, %1, %2, %3;" : "=r"(result.x) : "r"(__double2hiint(__longlong_as_double(value))), "r"(__double2loint(__longlong_as_double(value))), "r"(offset));
+		asm("shf.r.wrap.b32 %0, %1, %2, %3;" : "=r"(result.y) : "r"(__double2loint(__longlong_as_double(value))), "r"(__double2hiint(__longlong_as_double(value))), "r"(offset));
+	}
+	return __double_as_longlong(__hiloint2double(result.y, result.x));
 }
+#else
+__device__ __forceinline__
+uint64_t rotr64(const uint64_t x, const int offset)
+{
+	uint64_t result;
+	asm("{\n\t"
+		".reg .b64 lhs;\n\t"
+		".reg .u32 roff;\n\t"
+		"shr.b64 lhs, %1, %2;\n\t"
+		"sub.u32 roff, 64, %2;\n\t"
+		"shl.b64 %0, %1, roff;\n\t"
+		"add.u64 %0, %0, lhs;\n\t"
+		"}\n"
+		: "=l"(result) : "l"(x), "r"(offset));
+	return result;
+}
+#endif
 
 __constant__ uint64_t blake2b_IV[8] =
 {
@@ -184,7 +214,7 @@ __device__ static void blake2b_compress(blake2b_state *S, const uint8_t block[BL
 		b = rotr64(b ^ c, 63); \
 		} while(0)
 
-#define ROUND(r)	\
+#define ROUND(r,v)	\
 	do { \
 		G(r,0,v[ 0],v[ 4],v[ 8],v[12]); \
 		G(r,1,v[ 1],v[ 5],v[ 9],v[13]); \
@@ -196,18 +226,18 @@ __device__ static void blake2b_compress(blake2b_state *S, const uint8_t block[BL
 		G(r,7,v[ 3],v[ 4],v[ 9],v[14]); \
 		} while(0)
 
-	ROUND(0);
-	ROUND(1);
-	ROUND(2);
-	ROUND(3);
-	ROUND(4);
-	ROUND(5);
-	ROUND(6);
-	ROUND(7);
-	ROUND(8);
-	ROUND(9);
-	ROUND(10);
-	ROUND(11);
+	ROUND(0, v);
+	ROUND(1, v);
+	ROUND(2, v);
+	ROUND(3, v);
+	ROUND(4, v);
+	ROUND(5, v);
+	ROUND(6, v);
+	ROUND(7, v);
+	ROUND(8, v);
+	ROUND(9, v);
+	ROUND(10, v);
+	ROUND(11, v);
 
 	for(i = 0; i < 8; ++i)
 		S->h[i] = S->h[i] ^ v[i] ^ v[i + 8];
