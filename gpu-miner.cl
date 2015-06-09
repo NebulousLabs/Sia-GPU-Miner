@@ -1,51 +1,5 @@
 int blake2b( uchar *out, uchar *in );
 
-// The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
-	private uchar header[256] = {0};
-	private uchar headerHash[32];
-	private uchar target[32];
-	headerHash[0] = 255;
-
-	int i;
-#pragma unroll
-	for (i = 0; i < 32; i++) {
-		target[i] = targ[i];
-		header[i] = headerIn[i];
-	}
-#pragma unroll
-	for (i = 32; i < 80; i++) {
-		header[i] = headerIn[i];
-	}
-
-	// Set nonce
-	private int id = get_global_id(0);
-	// Support global work sizes of up to 256^4 - 1
-	header[32] = id / (256 * 256 * 256);
-	header[33] = id / (256 * 256);
-	header[34] = id / 256;
-	header[35] = id % 256;
-
-	// Hash the header
-	blake2b(headerHash, header);
-
-	// Compare header to target
-	int z = 0;
-	while (target[z] == headerHash[z]) {
-		z++;
-	}
-	if (headerHash[z] < target[z]) {
-		// Transfer the output to global space.
-		for (i = 0; i < 8; i++) {
-			nonceOut[i] = header[i + 32];
-		}
-		for (i = 0; i < 32; i++) {
-			hashOut[i] = headerHash[i];
-		}
-		return;
-	}
-}
-
 // Implementations of clmemset and memcopy
 void *clmemset( __private void *s, __private int c, __private size_t n) {
 	uchar *p = s;
@@ -127,6 +81,38 @@ static int blake2b_compress( __private blake2b_state *S, __private const uchar b
 
 int blake2b( __private uchar *out, __private uchar *in )
 {
+
+	return 0;
+}
+
+// The kernel that grinds nonces until it finds a hash below the target
+__kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
+	private uchar header[256] = {0};
+	private uchar headerHash[32];
+	private uchar target[32];
+	headerHash[0] = 255;
+
+	int i;
+#pragma unroll
+	for (i = 0; i < 32; i++) {
+		target[i] = targ[i];
+		header[i] = headerIn[i];
+	}
+#pragma unroll
+	for (i = 32; i < 80; i++) {
+		header[i] = headerIn[i];
+	}
+
+	// Set nonce
+	private int id = get_global_id(0);
+	// Support global work sizes of up to 256^4 - 1
+	header[32] = id / (256 * 256 * 256);
+	header[33] = id / (256 * 256);
+	header[34] = id / 256;
+	header[35] = id % 256;
+
+	// Hash the header
+	// blake2b(headerHash, header);
 	// Initialize a state.
 	private blake2b_state S[1];
 	clmemset( S, 0, sizeof( blake2b_state ) );
@@ -138,10 +124,9 @@ int blake2b( __private uchar *out, __private uchar *in )
 
 	ulong m[16];
 	ulong v[16];
-	int i;
 
 	for( i = 0; i < 16; ++i )
-		m[i] = load64( in + i * sizeof( m[i] ) );
+		m[i] = load64( header + i * sizeof( m[i] ) );
 
 	for( i = 0; i < 8; ++i )
 		v[i] = S->h[i];
@@ -199,7 +184,21 @@ int blake2b( __private uchar *out, __private uchar *in )
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
 		store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
 
-	clmemcpy( out, buffer, 32 );
+	clmemcpy( headerHash, buffer, 32 );
 
-	return 0;
+	// Compare header to target
+	int z = 0;
+	while (target[z] == headerHash[z]) {
+		z++;
+	}
+	if (headerHash[z] < target[z]) {
+		// Transfer the output to global space.
+		for (i = 0; i < 8; i++) {
+			nonceOut[i] = header[i + 32];
+		}
+		for (i = 0; i < 32; i++) {
+			hashOut[i] = headerHash[i];
+		}
+		return;
+	}
 }
