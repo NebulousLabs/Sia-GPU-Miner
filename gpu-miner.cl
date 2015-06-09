@@ -7,11 +7,13 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	private uchar target[32];
 	headerHash[0] = 255;
 
-	int i, z;
+	int i;
+#pragma unroll
 	for (i = 0; i < 32; i++) {
 		target[i] = targ[i];
 		header[i] = headerIn[i];
 	}
+#pragma unroll
 	for (i = 32; i < 80; i++) {
 		header[i] = headerIn[i];
 	}
@@ -28,7 +30,7 @@ __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __gl
 	blake2b(headerHash, header);
 
 	// Compare header to target
-	z = 0;
+	int z = 0;
 	while (target[z] == headerHash[z]) {
 		z++;
 	}
@@ -57,6 +59,7 @@ void clmemcpy( __private void *dest, __private const void *src, __private size_t
 	int i = 0 ;
 	char *dest8 = (char*)dest;
 	char *src8 = (char*)src;
+#pragma unroll
 	for (int i = 0; i < num; i++) {
 		dest8[i] = src8[i];
 	}
@@ -68,26 +71,15 @@ void clmemcpy( __private void *dest, __private const void *src, __private size_t
 #define ALIGN(x) __attribute__((aligned(x)))
 #endif
 
-  enum blake2b_constant
-  {
-	BLAKE2B_BLOCKBYTES = 128,
-	BLAKE2B_OUTBYTES   = 64,
-	BLAKE2B_KEYBYTES   = 64,
-	BLAKE2B_SALTBYTES  = 16,
-	BLAKE2B_PERSONALBYTES = 16
-  };
-
-#pragma pack(push, 1)
-  ALIGN( 64 ) typedef struct __blake2b_state
+  typedef struct __blake2b_state
   {
 	ulong h[8];
 	ulong t[2];
 	ulong f[2];
-	uchar  buf[2 * BLAKE2B_BLOCKBYTES];
+	uchar  buf[256];
 	size_t   buflen;
 	uchar  last_node;
   } blake2b_state;
-#pragma pack(pop)
 
   // Streaming API
   int blake2b_update( __private blake2b_state *S, __private const uchar *in, __private ulong inlen );
@@ -133,7 +125,7 @@ __constant uchar blake2b_sigma[12][16] =
 	{ 14, 10,	4,	8,	9, 15, 13,	6,	1, 12,	0,	2, 11,	7,	5,	3 }
 };
 
-static int blake2b_compress( __private blake2b_state *S, __private const uchar block[BLAKE2B_BLOCKBYTES] )
+static int blake2b_compress( __private blake2b_state *S, __private const uchar block[128] )
 {
 	ulong m[16];
 	ulong v[16];
@@ -207,17 +199,17 @@ int blake2b( __private uchar *out, __private uchar *in )
 
 	ulong inlen = 80;
 	size_t left = S->buflen;
-	size_t fill = 2 * BLAKE2B_BLOCKBYTES - left;
+	size_t fill = 2 * 128 - left;
 
 	if( inlen > fill )
 	{
 		clmemcpy( S->buf + left, in, fill ); // Fill buffer
 		S->buflen += fill;
 		blake2b_compress( S, S->buf ); // Compress
-		clmemcpy( S->buf, S->buf + BLAKE2B_BLOCKBYTES, BLAKE2B_BLOCKBYTES ); // Shift buffer left
-		S->buflen -= BLAKE2B_BLOCKBYTES;
+		clmemcpy( S->buf, S->buf + 128, 128 ); // Shift buffer left
+		S->buflen -= 128;
 	}
-	else // inlen <= fill
+	else
 	{
 		clmemcpy( S->buf + left, in, inlen );
 		S->buflen += inlen; // Be lazy, do not compress
@@ -226,10 +218,10 @@ int blake2b( __private uchar *out, __private uchar *in )
 
 	S->t[0] += S->buflen;
 	S->f[0] = ~((ulong)0);
-	clmemset( S->buf + S->buflen, 0, 2 * BLAKE2B_BLOCKBYTES - S->buflen ); // Padding
+	clmemset( S->buf + S->buflen, 0, 2 * 128 - S->buflen ); // Padding
 	blake2b_compress( S, S->buf );
 
-	uchar buffer[BLAKE2B_OUTBYTES];
+	uchar buffer[64];
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
 		store64( buffer + sizeof( S->h[i] ) * i, S->h[i] );
 

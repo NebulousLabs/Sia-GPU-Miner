@@ -69,7 +69,7 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	}
 
 	// Check for target corruption
-	if (target[0] != 0 || target[1] != 0 || target[2] != 0 || target[3] != 0) {
+	if (target[0] != 0 || target[1] != 0) {
 		if (target_corrupt_flag) {
 			return -1;
 		}
