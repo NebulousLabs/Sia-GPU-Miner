@@ -8,13 +8,16 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <unistd.h>
 
 #include "network.h"
  
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
-#include <CL/cl.h>  
+#include <CL/cl.h>
 #endif
  
 #define MAX_SOURCE_SIZE (0x200000)
@@ -30,7 +33,12 @@ cl_int ret;
 CURL *curl;
 
 unsigned int blocks_mined = 0;
+static volatile int quit = 0;
 
+void quitSignal(int __unused) {
+	quit = 1;
+	printf("\nCaught deadly signal, quitting...\n");
+}
 
 // Perform global_item_size * iter_per_thread hashes
 // Return -1 if a block is found
@@ -60,7 +68,9 @@ double grindNonces(size_t global_item_size) {
 	size_t blocklen = 0;
 
 	// Get new block header and target
-	get_block_for_work(curl, target, blockHeader, &block, &blocklen);
+	if (get_block_for_work(curl, target, blockHeader, &block, &blocklen) != 0) {
+		return 0;
+	}
 
 	// Copy input data to the memory buffer
 	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
@@ -83,50 +93,67 @@ double grindNonces(size_t global_item_size) {
 	if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
 
 	// Did we find one?
-	i = 0;
-	while (target[i] == headerHash[i]) {
-		i++;
-	}
-	if (headerHash[i] < target[i]) {
+	if (memcmp(headerHash, target, 8) < 0) {
 		// Copy nonce to block
-		for (i = 0; i < 8; i++) {
-			block[i + 32] = nonceOut[i];
-		}
-
+		memcpy(block+32, nonceOut, 8);
 		submit_block(curl, block, blocklen);
 		blocks_mined++;
-	} else {
-		// Hashrate is inaccurate if a block was found
-		#ifdef __linux__
-		clock_gettime(CLOCK_REALTIME, &end);
-
-		double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-		double run_time_seconds = nanosecondsElapsed * 1e-9;
-		#else
-		double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-		#endif
-		double hash_rate = global_item_size / (run_time_seconds*1000000);
-		// TODO: Print est time until next block (target difficulty / hashrate
-		return hash_rate;
+		return -1;
 	}
-	return -1;
+
+	// Hashrate is inaccurate if a block was found
+	#ifdef __linux__
+	clock_gettime(CLOCK_REALTIME, &end);
+	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+	double run_time_seconds = nanosecondsElapsed * 1e-9;
+	#else
+	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+	#endif
+	double hash_rate = global_item_size / (run_time_seconds*1000000);
+	// TODO: Print est time until next block (target difficulty / hashrate)
+	return hash_rate;
 }
 
-int main() {   
+int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
 	cl_program program = NULL;
 	cl_uint ret_num_devices;
 	cl_uint ret_num_platforms;
- 
-	int i;
-	size_t global_item_size = 1;
+
+	int i, c, cycles_per_iter;
+	char *port_number;
+	double hash_rate, seconds_per_iter;
+	size_t global_item_size = 256*256*16;
+
+	// parse args
+	cycles_per_iter = 15;
+	seconds_per_iter = 1.0;
+	port_number = "9980";
+	while ( (c = getopt(argc, argv, "c:s:p:")) != -1) {
+		switch (c) {
+		case 'c':
+			sscanf(optarg, "%d", &cycles_per_iter);
+			break;
+		case 's':
+			sscanf(optarg, "%lf", &seconds_per_iter);
+			break;
+		case 'p':
+			port_number = strdup(optarg);
+			break;
+		}
+	}
+
+	// Set siad URL
+	set_port(port_number);
 
 	// Use curl to communicate with siad
 	curl = curl_easy_init();
 
 	// Load kernel source file
+	printf("Initializing...");
+	fflush(stdout);
 	FILE *fp;
 	const char fileName[] = "./gpu-miner.cl";
 	size_t source_size;
@@ -201,19 +228,17 @@ int main() {
 	kernel = clCreateKernel(program, "nonceGrind", &ret);
 
 	// Set OpenCL kernel arguments
-	ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&blockHeadermobj);
-	if (ret != CL_SUCCESS) { printf("failed to set first kernel arg: \n"); exit(1); }
-	ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&headerHashmobj);
-	if (ret != CL_SUCCESS) { printf("failed to set fifth kernel arg: \n"); exit(1); }
-	ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&targmobj);
-	if (ret != CL_SUCCESS) { printf("failed to set third kernel arg: \n"); exit(1); }
-	ret = clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&nonceOutmobj);
-	if (ret != CL_SUCCESS) { printf("failed to set second kernel arg: \n"); exit(1); }
+	void *args[] = { &blockHeadermobj, &headerHashmobj, &targmobj, &nonceOutmobj };
+	for (i = 0; i < 4; i++) {
+		ret = clSetKernelArg(kernel, i, sizeof(cl_mem), args[i]);
+		if (ret != CL_SUCCESS) {
+			printf("failed to set kernel arg %d (error code %d)\n", i, ret);
+			exit(1);
+		}
+	}
+	printf("\n");
 
-	double hash_rate;
-	global_item_size = 256*256*16;
-
-	// Make each iteration take about 3 seconds
+	// Make each iteration take about 1 second
 	#ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);
@@ -229,23 +254,24 @@ int main() {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= 0.015 / run_time_seconds;
+	global_item_size *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
 
-	// Grind nonces endlessly using
-	while (1) {
-		i++;
-		double temp = grindNonces(global_item_size);
-		while (temp == -1) {
+	// Grind nonces until SIGINT
+	signal(SIGINT, quitSignal);
+	while (!quit) {
+		for (i = 0; i < cycles_per_iter; i++) {
 			// Repeat until no block is found
-			temp = grindNonces(global_item_size);
+			do {
+				hash_rate = grindNonces(global_item_size);
+			} while (hash_rate == -1);
 		}
-		hash_rate = temp;
-		if (i % 15 == 0) {
+
+		if (!quit) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);
 		}
 	}
-	
+
 	// Finalization
 	ret = clFlush(command_queue);   
 	ret = clFinish(command_queue);
@@ -257,10 +283,10 @@ int main() {
 	ret = clReleaseMemObject(nonceOutmobj);
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);	
- 
- 	curl_easy_cleanup(curl);
- 	
+
+	curl_easy_cleanup(curl);
+
 	free(source_str);
- 
+
 	return 0;
 }
