@@ -2,7 +2,7 @@ int blake2b( uchar *out, uchar *in );
 
 // The kernel that grinds nonces until it finds a hash below the target
 __kernel void nonceGrind(__global uchar *headerIn, __global uchar *hashOut, __global uchar *targ, __global uchar *nonceOut) {
-	private uchar header[80];
+	private uchar header[256];
 	private uchar headerHash[32];
 	private uchar target[32];
 	headerHash[0] = 255;
@@ -77,13 +77,8 @@ void clmemcpy( __private void *dest, __private const void *src, __private size_t
 	ulong t[2];
 	ulong f[2];
 	uchar  buf[256];
-	size_t   buflen;
 	uchar  last_node;
   } blake2b_state;
-
-  // Streaming API
-  int blake2b_update( __private blake2b_state *S, __private const uchar *in, __private ulong inlen );
-  int blake2b_final( __private blake2b_state *S, __private uchar *out );
 
 static inline ulong load64( __private const void *src )
 {
@@ -127,12 +122,27 @@ __constant uchar blake2b_sigma[12][16] =
 
 static int blake2b_compress( __private blake2b_state *S, __private const uchar block[128] )
 {
+	return 0;
+}
+
+int blake2b( __private uchar *out, __private uchar *in )
+{
+	// Initialize a state.
+	private blake2b_state S[1];
+	clmemset( S, 0, sizeof( blake2b_state ) );
+	for( int i = 0; i < 8; ++i ) S->h[i] = blake2b_IV[i];
+	S->h[0] ^= 0x0000000001010020UL;
+
+	S->t[0] += 80;
+	S->f[0] = ~((ulong)0);
+	clmemset( in + 80, 0, 2 * 128 - 80 ); // Padding
+
 	ulong m[16];
 	ulong v[16];
 	int i;
 
 	for( i = 0; i < 16; ++i )
-		m[i] = load64( block + i * sizeof( m[i] ) );
+		m[i] = load64( in + i * sizeof( m[i] ) );
 
 	for( i = 0; i < 8; ++i )
 		v[i] = S->h[i];
@@ -185,41 +195,6 @@ static int blake2b_compress( __private blake2b_state *S, __private const uchar b
 
 #undef G
 #undef ROUND
-	return 0;
-}
-
-// inlen, at least, should be ulong. Others can be size_t.
-int blake2b( __private uchar *out, __private uchar *in )
-{
-	private blake2b_state S[1];
-
-	clmemset( S, 0, sizeof( blake2b_state ) );
-	for( int i = 0; i < 8; ++i ) S->h[i] = blake2b_IV[i];
-	S->h[0] ^= 0x0000000001010020UL;
-
-	ulong inlen = 80;
-	size_t left = S->buflen;
-	size_t fill = 2 * 128 - left;
-
-	if( inlen > fill )
-	{
-		clmemcpy( S->buf + left, in, fill ); // Fill buffer
-		S->buflen += fill;
-		blake2b_compress( S, S->buf ); // Compress
-		clmemcpy( S->buf, S->buf + 128, 128 ); // Shift buffer left
-		S->buflen -= 128;
-	}
-	else
-	{
-		clmemcpy( S->buf + left, in, inlen );
-		S->buflen += inlen; // Be lazy, do not compress
-	}
-
-
-	S->t[0] += S->buflen;
-	S->f[0] = ~((ulong)0);
-	clmemset( S->buf + S->buflen, 0, 2 * 128 - S->buflen ); // Padding
-	blake2b_compress( S, S->buf );
 
 	uchar buffer[64];
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
