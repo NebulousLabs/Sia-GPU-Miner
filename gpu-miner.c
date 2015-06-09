@@ -40,10 +40,10 @@ void quitSignal(int __unused) {
 	printf("\nCaught deadly signal, quitting...\n");
 }
 
-// Perform global_item_size * iter_per_thread hashes
+// Perform items_per_iter * cycles_per_iter hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
-double grindNonces(size_t global_item_size) {
+double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	// Start timing this iteration
 	#ifdef __linux__
 	struct timespec begin, end;
@@ -52,6 +52,7 @@ double grindNonces(size_t global_item_size) {
 	clock_t startTime = clock();
 	#endif
 
+	int i;
 	uint8_t blockHeader[80];
 	uint8_t headerHash[32];
 	uint8_t target[32];
@@ -70,33 +71,42 @@ double grindNonces(size_t global_item_size) {
 		return 0;
 	}
 
-	// Copy input data to the memory buffer
-	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+	// By doing a bunch of low intensity calls, we prevent freezing
+	// By splitting them up inside this function, we also avoid calling
+	// get_block_for_work too often
+	for (i = 0; i < cycles_per_iter; i++) {
+		// Kernel sets nonce most significant bits, so we'll change least significant here
+		blockHeader[38] = i / 256;
+		blockHeader[39] = i % 256;
 
-	// Execute OpenCL kernel as data parallel
-	size_t local_item_size = 256;
-	global_item_size -= global_item_size % 256;
-	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
+		// Copy input data to the memory buffer
+		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
+		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
+		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
 
-	// Copy result to host
-	ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
+		// Execute OpenCL kernel as data parallel
+		size_t local_item_size = 256;
+		items_per_iter -= items_per_iter % 256;
+		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &items_per_iter, &local_item_size, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
-	// Did we find one?
-	if (memcmp(headerHash, target, 8) < 0) {
-		// Copy nonce to block
-		memcpy(block+32, nonceOut, 8);
-		submit_block(curl, block, blocklen);
-		blocks_mined++;
-		return -1;
+		// Copy result to host
+		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
+		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
+
+		// Did we find one?
+		if (memcmp(headerHash, target, 8) < 0) {
+			// Copy nonce to block
+			memcpy(block+32, nonceOut, 8);
+			submit_block(curl, block, blocklen);
+			blocks_mined++;
+			return -1;
+		}
 	}
 
 	// Hashrate is inaccurate if a block was found
@@ -107,7 +117,7 @@ double grindNonces(size_t global_item_size) {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	double hash_rate = global_item_size / (run_time_seconds*1000000);
+	double hash_rate = cycles_per_iter * items_per_iter / (run_time_seconds*1000000);
 	// TODO: Print est time until next block (target difficulty / hashrate)
 	return hash_rate;
 }
@@ -123,7 +133,7 @@ int main(int argc, char *argv[]) {
 	int i, c, cycles_per_iter;
 	char *port_number;
 	double hash_rate, seconds_per_iter;
-	size_t global_item_size = 256*256*16;
+	size_t items_per_iter = 256*256*16;
 
 	// parse args
 	cycles_per_iter = 15;
@@ -243,7 +253,7 @@ int main(int argc, char *argv[]) {
 	#else
 	clock_t startTime = clock();
 	#endif
-	grindNonces(global_item_size);
+	grindNonces(items_per_iter, 1);
 	#ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
 
@@ -252,17 +262,15 @@ int main(int argc, char *argv[]) {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
+	items_per_iter *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
 
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while (!quit) {
-		for (i = 0; i < cycles_per_iter; i++) {
-			// Repeat until no block is found
-			do {
-				hash_rate = grindNonces(global_item_size);
-			} while (hash_rate == -1);
-		}
+		// Repeat until no block is found
+		do {
+			hash_rate = grindNonces(items_per_iter, cycles_per_iter);
+		} while (hash_rate == -1);
 
 		if (!quit) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
