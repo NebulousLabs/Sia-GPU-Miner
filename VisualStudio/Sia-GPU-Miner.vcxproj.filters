@@ -21,9 +21,15 @@
     <ClCompile Include="..\gpu-miner.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="getopt\getopt_long.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\network.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="getopt\getopt.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
