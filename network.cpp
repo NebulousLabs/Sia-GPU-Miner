@@ -14,8 +14,8 @@ char *bfw_url, *submit_url;
 void set_port(char *port) {
 	bfw_url = (char*)malloc(29 + strlen(port));
 	submit_url = (char*)malloc(28 + strlen(port));
-	sprintf(bfw_url, "localhost:%s/miner/blockforwork", port);
-	sprintf(submit_url, "localhost:%s/miner/submitblock", port);
+	sprintf(bfw_url, "localhost:%s/miner/headerforwork", port);
+	sprintf(submit_url, "localhost:%s/miner/submitheader", port);
 }
 
 // Write network data to an array of bytes
@@ -34,7 +34,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	return size*nmemb;
 }
 
-int get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **block, size_t *blocklen) {
+int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
 	if (!curl) {
 		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
 		exit(1);
@@ -55,31 +55,27 @@ int get_block_for_work(CURL *curl, uint8_t *target, uint8_t *header, uint8_t **b
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		exit(1);
 	}
-	if (in.len < 174) {
-		fprintf(stderr, "curl did not receive enough bytes (got %zu, expected at least 174)\n", in.len);
+	if (in.len != 112) {
+		fprintf(stderr, "\ncurl did not receive correct bytes (got %d, expected 112)\n", in.len);
 		return 1;
 	}
 
 	// Copy data to return
-	*blocklen = in.len - 112;
-	*block = (uint8_t*)malloc(*blocklen);
 	memcpy(target, in.bytes,     32);
 	memcpy(header, in.bytes+32,  80);
-	memcpy(*block, in.bytes+112, in.len-112);
 
 	return 0;
 }
 
-void submit_block(CURL *curl, uint8_t *block, size_t blocklen) {
+void submit_header(CURL *curl, uint8_t *header) {
 	if (curl) {
 		CURLcode res;
-		curl_off_t numBytes = blocklen;
 
 		curl_easy_reset(curl);
 		curl_easy_setopt(curl, CURLOPT_URL, submit_url);
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, numBytes);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, block);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, 80);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
 		// Prevent printing to stdout
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);

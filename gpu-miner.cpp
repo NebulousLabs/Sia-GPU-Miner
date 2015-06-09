@@ -85,12 +85,8 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	memset(headerHash, 255, 32);
 	memset(target, 255, 32);
 
-	// Store block from siad
-	uint8_t *block;
-	size_t blocklen = 0;
-
 	// Get new block header and target
-	if(get_block_for_work(curl, (uint8_t*)target, blockHeader, &block, &blocklen) != 0)
+	if(get_header_for_work(curl, (uint8_t*)target, blockHeader) != 0)
 	{
 		return 0;
 	}
@@ -110,7 +106,6 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
 		printf("Waiting for problem to be resolved...");
 		fflush(stdout);
-		return -1;
 	}*/
 	target_corrupt_flag = 0;
 
@@ -159,18 +154,18 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 	}
 	cudaDeviceSynchronize();
-	// Did we find one?
+
 	// Did we find one?
 	if(memcmp(headerHash, target, 8) < 0)
 	{
-		// Copy nonce to block
-		memcpy(block + 32, nonceOut, 8);
-		submit_block(curl, block, blocklen);
+		// Copy nonce to header.
+		memcpy(blockHeader + 32, nonceOut, 8);
+		submit_header(curl, blockHeader);
 		blocks_mined++;
 		return -1;
 	}
 	}
-	free(block);
+
 	// Hashrate is inaccurate if a block was found
 #ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
@@ -222,7 +217,7 @@ int main(int argc, char *argv[])
 			sscanf(optarg, "%lf", &seconds_per_iter);
 			break;
 		case 'p':
-			port_number = strdup(optarg);
+			port_number = _strdup(optarg);
 			break;
 		}
 	}
@@ -313,7 +308,7 @@ int main(int argc, char *argv[])
 			hash_rate = grindNonces(items_per_iter, cycles_per_iter);
 		} while(hash_rate == -1);
 
-		if(!quit)
+		if(!quit && hash_rate != 0)
 		{
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);
