@@ -34,16 +34,17 @@ CURL *curl;
 
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
+int target_corrupt_flag = 0;
 
 void quitSignal(int __unused) {
 	quit = 1;
 	printf("\nCaught deadly signal, quitting...\n");
 }
 
-// Perform global_item_size * iter_per_thread hashes
+// Perform items_per_iter * cycles_per_iter hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
-double grindNonces(size_t global_item_size) {
+double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	// Start timing this iteration
 	#ifdef __linux__
 	struct timespec begin, end;
@@ -52,16 +53,15 @@ double grindNonces(size_t global_item_size) {
 	clock_t startTime = clock();
 	#endif
 
+	int i;
 	uint8_t blockHeader[80];
 	uint8_t headerHash[32];
 	uint8_t target[32];
 	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
 
-	int i;
-	for (i = 0; i < 8; i++) {
-		nonceOut[i] = 0;
-		headerHash[i] = 255;
-	}
+	memset(nonceOut, 0, 8);
+	memset(headerHash, 255, 32);
+	memset(target, 255, 32);
 
 	// Store block from siad
 	uint8_t *block;
@@ -72,34 +72,62 @@ double grindNonces(size_t global_item_size) {
 		return 0;
 	}
 
-	// Copy input data to the memory buffer
-	ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
-
-	// Execute OpenCL kernel as data parallel
-	size_t local_item_size = 256;
-	global_item_size -= global_item_size % 256;
-	ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
-
-	// Copy result to host
-	ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
-	ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
-
-	// Did we find one?
-	if (memcmp(headerHash, target, 8) < 0) {
-		// Copy nonce to block
-		memcpy(block+32, nonceOut, 8);
-		submit_block(curl, block, blocklen);
-		blocks_mined++;
+	// Check for target corruption
+	if (target[0] != 0 || target[1] != 0 || target[2] != 0 || target[3] != 0) {
+		if (target_corrupt_flag) {
+			return -1;
+		}
+		target_corrupt_flag = 1;
+		printf("Received corrupt target from Sia\n");
+		printf("Usually this resolves itself within a minute or so\n");
+		printf("If it happens frequently trying increasing seconds per iteration\n");
+		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
+		printf("Waiting for problem to be resolved...");
+		fflush(stdout);
 		return -1;
 	}
+	target_corrupt_flag = 0;
+
+	// By doing a bunch of low intensity calls, we prevent freezing
+	// By splitting them up inside this function, we also avoid calling
+	// get_block_for_work too often
+	for (i = 0; i < cycles_per_iter; i++) {
+		// Kernel sets nonce most significant bits, so we'll change least significant here
+		blockHeader[38] = i / 256;
+		blockHeader[39] = i % 256;
+
+		// Copy input data to the memory buffer
+		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
+		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
+		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+
+		// Execute OpenCL kernel as data parallel
+		size_t local_item_size = 256;
+		items_per_iter -= items_per_iter % 256;
+		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &items_per_iter, &local_item_size, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
+
+		// Copy result to host
+		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
+		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
+		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
+
+		// Did we find one?
+		if (memcmp(headerHash, target, 8) < 0) {
+			// Copy nonce to block
+			memcpy(block+32, nonceOut, 8);
+			submit_block(curl, block, blocklen);
+			blocks_mined++;
+			return -1;
+		}
+	}
+
+	// Free memory allocated in network.c
+	free(block);
 
 	// Hashrate is inaccurate if a block was found
 	#ifdef __linux__
@@ -109,8 +137,8 @@ double grindNonces(size_t global_item_size) {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	double hash_rate = global_item_size / (run_time_seconds*1000000);
-	// TODO: Print est time until next block (target difficulty / hashrate)
+	double hash_rate = cycles_per_iter * items_per_iter / (run_time_seconds*1000000);
+
 	return hash_rate;
 }
 
@@ -125,16 +153,30 @@ int main(int argc, char *argv[]) {
 	int i, c, cycles_per_iter;
 	char *port_number;
 	double hash_rate, seconds_per_iter;
-	size_t global_item_size = 256*256*16;
+	size_t items_per_iter = 256*256*16;
 
 	// parse args
 	cycles_per_iter = 15;
 	seconds_per_iter = 1.0;
 	port_number = "9980";
-	while ( (c = getopt(argc, argv, "c:s:p:")) != -1) {
+	while ( (c = getopt(argc, argv, "hc:s:p:")) != -1) {
 		switch (c) {
+		case 'h':
+			printf("\nUsage:\n\n");
+			printf("\t c - cycles per iter: Number of workloads hashing gets split into each iteration\n");
+			printf("\t\tIncrease this if your computer is freezing or locking up\n");
+			printf("\n");
+			printf("\t s - seconds per iter: Time between Sia API calls and hash rate updates\n");
+			printf("\t\tIncrease this if your miner is receiving invalid targets\n");
+			printf("\n");
+			exit(0);
+			break;
 		case 'c':
 			sscanf(optarg, "%d", &cycles_per_iter);
+			if (cycles_per_iter < 1 || cycles_per_iter > 1000) {
+				printf("Cycles per iter must be at least 1 and no more than 1000\n");
+				exit(1);
+			}
 			break;
 		case 's':
 			sscanf(optarg, "%lf", &seconds_per_iter);
@@ -245,7 +287,7 @@ int main(int argc, char *argv[]) {
 	#else
 	clock_t startTime = clock();
 	#endif
-	grindNonces(global_item_size);
+	grindNonces(items_per_iter, 1);
 	#ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
 
@@ -254,17 +296,15 @@ int main(int argc, char *argv[]) {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	global_item_size *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
+	items_per_iter *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
 
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while (!quit) {
-		for (i = 0; i < cycles_per_iter; i++) {
-			// Repeat until no block is found
-			do {
-				hash_rate = grindNonces(global_item_size);
-			} while (hash_rate == -1);
-		}
+		// Repeat until no block is found
+		do {
+			hash_rate = grindNonces(items_per_iter, cycles_per_iter);
+		} while (hash_rate == -1);
 
 		if (!quit) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
