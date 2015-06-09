@@ -109,6 +109,9 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		}
 	}
 
+	// Free memory allocated in network.c
+	free(block);
+
 	// Hashrate is inaccurate if a block was found
 	#ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
@@ -118,7 +121,7 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
 	double hash_rate = cycles_per_iter * items_per_iter / (run_time_seconds*1000000);
-	// TODO: Print est time until next block (target difficulty / hashrate)
+
 	return hash_rate;
 }
 
