@@ -105,7 +105,7 @@ __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __glo
 		for (i = 0; i < 8; i++) {
 			nonceOut[i] = header[i + 32];
 		}
-		for (i = 0; i < 32; i++) {
+		for (i = 0; i < 16; i++) {
 			hashOut[i] = headerHash[i];
 		}
 		return;

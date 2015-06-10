@@ -54,7 +54,7 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	#endif
 
 	uint8_t blockHeader[80];
-	uint8_t headerHash[32] = {255};
+	uint8_t headerHash[16] = {255};
 	uint8_t target[32] = {255};
 	uint8_t nonceOut[8] = {0};
 
@@ -90,7 +90,7 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
-		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
 		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
@@ -102,13 +102,13 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
 		// Copy result to host
-		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
 		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
 
 		// Did we find one?
-		if (memcmp(headerHash, target, 8) < 0) {
+		if (memcmp(headerHash, target, 16) < 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			submit_header(curl, blockHeader);
