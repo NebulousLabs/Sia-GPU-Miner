@@ -67,9 +67,9 @@ __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __glo
 	v[10] = iv[2];
 	v[11] = iv[3];
 	v[12] = t[0] ^ iv[4];
-	v[13] = t[1] ^ iv[5];
+	v[13] = iv[5];
 	v[14] = f[0] ^ iv[6];
-	v[15] = f[1] ^ iv[7];
+	v[15] = iv[7];
 	iv[0] ^= 0x0000000001010020UL;
 	for( i = 0; i < 8; ++i )
 		v[i] = iv[i];
