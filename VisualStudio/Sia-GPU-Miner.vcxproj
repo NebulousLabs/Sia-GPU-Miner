@@ -115,6 +115,7 @@
     <CudaCompile>
       <CudaRuntime>Static</CudaRuntime>
       <CodeGeneration>compute_30,compute_30;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
+      <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
@@ -139,6 +140,7 @@
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Static</CudaRuntime>
       <CodeGeneration>compute_30,compute_30;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
+      <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
@@ -169,6 +171,7 @@
       <CudaRuntime>Static</CudaRuntime>
       <CodeGeneration>compute_30,compute_30;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
       <Optimization>O2</Optimization>
+      <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
@@ -200,6 +203,7 @@
       <CudaRuntime>Static</CudaRuntime>
       <CodeGeneration>compute_30,compute_30;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
       <Optimization>O2</Optimization>
+      <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
     <CudaLink>
       <PerformDeviceLink>false</PerformDeviceLink>
