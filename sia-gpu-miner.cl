@@ -4,21 +4,13 @@ static inline ulong rotr64( __const ulong w, __const unsigned c )
 }
 
 // The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __global uint *targetIn, __global uchar *nonceOut) {
-	uchar header[256] = {0};
-	uchar target[16];
-
-	// Transfer inputs from global memory
+__kernel void nonceGrind(__global uint *headerIn, __global ulong *hashOut, __global uchar *targetIn, __global ulong *nonceOut) {
 	int i;
-	for (i = 0; i < 4; i++) {
-		*(uint*)(target + i * 4) = targetIn[i];
-	}
+	uchar header[128] = {0};
 	for (i = 0; i < 20; i++) {
 		*(uint*)(header + i * 4) = headerIn[i];
 	}
-
-	// Set nonce
-	*(uint*)(header + 32) = get_global_id(0);
+	*(uint*)(header + 32) = get_global_id(0); // nonce
 
 	uchar blake2b_sigma[12][16] =
 	{
@@ -36,7 +28,7 @@ __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __glo
 		{ 14, 10,	4,	8,	9, 15, 13,	6,	1, 12,	0,	2, 11,	7,	5,	3 }
 	};
 #define G(r,i,a,b,c,d) \
-	a = a + b + m[blake2b_sigma[r][2*i+0]]; \
+	a = a + b + m[blake2b_sigma[r][2*i]]; \
 	d = rotr64(d ^ a, 32); \
 	c = c + d; \
 	b = rotr64(b ^ c, 24); \
@@ -55,24 +47,10 @@ __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __glo
 	G(r,7,v[ 3],v[ 4],v[ 9],v[14]);
 	// BLAKE2B START
 
-	ulong iv[8] = { 0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179 };
-	ulong v[16];
-	ulong t[2] = {80, 0};
-	ulong f[2] = {~0, 0};
 	ulong m[16];
 	for( i = 0; i < 16; ++i )
 		m[i] = *(ulong*)( header + i * 8 );
-	v[ 8] = iv[0];
-	v[ 9] = iv[1];
-	v[10] = iv[2];
-	v[11] = iv[3];
-	v[12] = t[0] ^ iv[4];
-	v[13] = iv[5];
-	v[14] = f[0] ^ iv[6];
-	v[15] = iv[7];
-	iv[0] ^= 0x0000000001010020UL;
-	for( i = 0; i < 8; ++i )
-		v[i] = iv[i];
+	ulong v[16] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179, 0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade68281, 0x9b05688c2b3e6c1f, 0xe07c265404be4294, 0x5be0cd19137e2179 };
 	ROUND( 0 );
 	ROUND( 1 );
 	ROUND( 2 );
@@ -85,9 +63,10 @@ __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __glo
 	ROUND( 9 );
 	ROUND( 10 );
 	ROUND( 11 );
-	uchar headerHash[64];
+	ulong iv[8] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179 };
 	for( i = 0; i < 8; ++i )
 		iv[i] = iv[i] ^ v[i] ^ v[i + 8];
+	uchar headerHash[64];
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
 		*(ulong*)(headerHash + 8 * i) = iv[i];
 
@@ -97,16 +76,16 @@ __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __glo
 
 	// Compare hash to target
 	i = 0;
-	while (target[i] == headerHash[i]) {
+	while (targetIn[i] == headerHash[i]) {
 		i++;
 	}
-	if (headerHash[i] < target[i]) {
+	if (headerHash[i] < targetIn[i]) {
 		// Transfer the output to global space.
-		for (i = 0; i < 8; i++) {
-			nonceOut[i] = header[i + 32];
+		for (i = 0; i < 2; i++) {
+			nonceOut[i] = *(ulong*)(header + i * 8 + 32);
 		}
-		for (i = 0; i < 16; i++) {
-			hashOut[i] = headerHash[i];
+		for (i = 0; i < 2; i++) {
+			hashOut[i] = iv[i];
 		}
 		return;
 	}

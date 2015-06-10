@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
 	blockHeadermobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 80 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create blockHeadermobj buffer: %d\n", ret); exit(1); }
 	headerHashmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 32 * sizeof(uint8_t), NULL, &ret);
-	if (ret != CL_SUCCESS) { printf("failed to create targmobj buffer: %d\n", ret); exit(1); }
+	if (ret != CL_SUCCESS) { printf("failed to create headerHashmobj buffer: %d\n", ret); exit(1); }
 	targmobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 32 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create targmobj buffer: %d\n", ret); exit(1); }
 	nonceOutmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 8 * sizeof(uint8_t), NULL, &ret);
