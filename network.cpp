@@ -14,6 +14,11 @@ char *bfw_url, *submit_url;
 void set_port(char *port) {
 	bfw_url = (char*)malloc(29 + strlen(port));
 	submit_url = (char*)malloc(28 + strlen(port));
+	if(bfw_url == NULL || submit_url == NULL)
+	{
+		printf("malloc error\n");
+		exit(EXIT_FAILURE);
+	}
 	sprintf(bfw_url, "localhost:%s/miner/headerforwork", port);
 	sprintf(submit_url, "localhost:%s/miner/submitheader", port);
 }

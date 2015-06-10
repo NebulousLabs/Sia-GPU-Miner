@@ -15,7 +15,6 @@ extern "C" {
 #include <cstdio>
 #include <cstddef>
 #include <cstdlib>
-#include <iostream>
 #include <cstring>
 using namespace std;
 #include <signal.h>
@@ -26,14 +25,14 @@ using namespace std;
 
 #define MAX_SOURCE_SIZE (0x200000)
 
-char *blockHeadermobj = NULL;
-char *headerHashmobj = NULL;
-char *targmobj = NULL;
-char *nonceOutmobj = NULL;
+char *blockHeadermobj = nullptr;
+char *headerHashmobj = nullptr;
+char *targmobj = nullptr;
+char *nonceOutmobj = nullptr;
 cudaError_t ret;
 cudaStream_t cudastream;
 
-CURL *curl;
+CURL *curl = nullptr;
 
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
@@ -67,6 +66,28 @@ static inline uint32_t swap32(uint32_t x)
 // Else return the hashrate in MH/s
 double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 {
+	static bool init = false;
+	static uint8_t *headerHash = nullptr;
+	static uint32_t *target = nullptr;
+	static uint8_t *nonceOut = nullptr;
+	static uint8_t *blockHeader = nullptr;
+
+	if(!init)
+	{
+		cudaMallocHost(&headerHash, 32);
+		cudaMallocHost(&target, 32);
+		cudaMallocHost(&nonceOut, 8);
+		cudaMallocHost(&blockHeader, 80);
+		ret = cudaGetLastError();
+		if(ret != cudaSuccess)
+		{
+			printf("%s\n", cudaGetErrorString(ret)); exit(1);
+		}
+		init = true;
+	}
+
+	*((uint64_t*)nonceOut) = 0;
+
 	// Start timing this iteration
 #ifdef __linux__
 	struct timespec begin, end;
@@ -75,15 +96,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	clock_t startTime = clock();
 #endif
 
-	uint8_t blockHeader[80];
-	uint8_t headerHash[32];
-	uint32_t target[8];
-	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
-
 	int i;
-	memset(nonceOut, 0, 8);
-	memset(headerHash, 255, 32);
-	memset(target, 255, 32);
 
 	// Get new block header and target
 	if(get_header_for_work(curl, (uint8_t*)target, blockHeader) != 0)
@@ -129,13 +142,18 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		{
 			printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
 		}
+		ret = cudaMemcpyAsync(nonceOutmobj, nonceOut, 8, cudaMemcpyHostToDevice, cudastream);
+		if(ret != cudaSuccess)
+		{
+			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
+		}
 
 		extern void nonceGrindcuda(cudaStream_t, int, char *, char *, char *, char *);
 		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, targmobj, nonceOutmobj);
 		ret = cudaGetLastError();
 		if(ret != cudaSuccess)
 		{
-			cout << cudaGetErrorString(ret) << endl; return -1;
+			printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
 
 		// Copy result to host
@@ -152,7 +170,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		cudaStreamSynchronize(cudastream);
 
 		// Did we find one?
-		if(memcmp(headerHash, target, 8) < 0)
+		if(*((uint64_t*)nonceOut) != 0)
 		{
 			// Copy nonce to header.
 			memcpy(blockHeader + 32, nonceOut, 8);
@@ -178,9 +196,10 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 int main(int argc, char *argv[])
 {
 	int c, cycles_per_iter;
-	char *port_number;
+	char *port_number = nullptr;
 	double hash_rate, seconds_per_iter;
 	uint32_t items_per_iter = 256 * 256 * 256 * 2;
+
 	// parse args
 	cycles_per_iter = 10;
 	seconds_per_iter = 10.0;
@@ -229,29 +248,29 @@ int main(int argc, char *argv[])
 	if(ret != cudaSuccess)
 	{
 		if(ret == cudaErrorNoDevice)
-			cout << "No CUDA device found" << endl;
+			printf("No CUDA device found");
 		if(ret == cudaErrorInsufficientDriver)
-			cout << "Driver error" << endl;
+			printf("Driver error\n");
 		return -1;
 	}
 
 	ret = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
 	if(ret != cudaSuccess)
 	{
-		cout << cudaGetErrorString(ret) << endl; return -1;
+		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 
 	// make it the active device
 	ret = cudaSetDevice(0);
 	if(ret != cudaSuccess)
 	{
-		cout << cudaGetErrorString(ret) << endl; return -1;
+		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 
 	ret = cudaStreamCreate(&cudastream);
 	if(ret != cudaSuccess)
 	{
-		cout << cudaGetErrorString(ret) << endl; return -1;
+		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 	// Create Buffer Objects
 	ret = cudaMalloc(&blockHeadermobj, 80);
@@ -312,7 +331,7 @@ int main(int argc, char *argv[])
 	ret = cudaStreamDestroy(cudastream);
 	if(ret != cudaSuccess)
 	{
-		cout << cudaGetErrorString(ret) << endl; return -1;
+		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 	cudaDeviceReset();
 
