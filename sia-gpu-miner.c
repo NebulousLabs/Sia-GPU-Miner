@@ -53,15 +53,10 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	clock_t startTime = clock();
 	#endif
 
-	int i;
 	uint8_t blockHeader[80];
-	uint8_t headerHash[32];
-	uint8_t target[32];
-	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
-
-	memset(nonceOut, 0, 8);
-	memset(headerHash, 255, 32);
-	memset(target, 255, 32);
+	uint8_t headerHash[32] = {255};
+	uint8_t target[32] = {255};
+	uint8_t nonceOut[8] = {0};
 
 	// Get new block header and target
 	if (get_header_for_work(curl, target, blockHeader) != 0) {
@@ -69,6 +64,7 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	}
 
 	// Check for target corruption
+	int i;
 	if (target[0] != 0 || target[1] != 0) {
 		if (target_corrupt_flag) {
 			return -1;
@@ -189,7 +185,7 @@ int main(int argc, char *argv[]) {
 	printf("Initializing...");
 	fflush(stdout);
 	FILE *fp;
-	const char fileName[] = "./gpu-miner.cl";
+	const char fileName[] = "./sia-gpu-miner.cl";
 	size_t source_size;
 	char *source_str;
 	fp = fopen(fileName, "r");
