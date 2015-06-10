@@ -113,7 +113,7 @@ __constant__ uint8_t blake2b_sigma[12][16] =
 	{ 14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3 }
 };
 
-__device__ static void blake2b_compress(uint64_t *const __restrict__ h, const uint64_t *const __restrict__ t, const uint64_t *const __restrict__ f, const uint64_t *const __restrict__ block)
+__device__ static void blake2b_compress(uint64_t *const __restrict__ h, const uint64_t *const __restrict__ block)
 {
 	uint64_t m[16];
 	uint64_t v[16];
@@ -129,10 +129,10 @@ __device__ static void blake2b_compress(uint64_t *const __restrict__ h, const ui
 	v[9] = 0xbb67ae8584caa73b;
 	v[10] = 0x3c6ef372fe94f82b;
 	v[11] = 0xa54ff53a5f1d36f1;
-	v[12] = t[0] ^ 0x510e527fade682d1;
-	v[13] = t[1] ^ 0x9b05688c2b3e6c1f;
-	v[14] = f[0] ^ 0x1f83d9abfb41bd6b;
-	v[15] = f[1] ^ 0x5be0cd19137e2179;
+	v[12] = 80 ^ 0x510e527fade682d1;
+	v[13] = 0x9b05688c2b3e6c1f;
+	v[14] = ~0x1f83d9abfb41bd6b;
+	v[15] = 0x5be0cd19137e2179;
 
 #define G(r,i,a,b,c,d) \
 	do { \
@@ -178,46 +178,6 @@ __device__ static void blake2b_compress(uint64_t *const __restrict__ h, const ui
 #undef ROUND
 }
 
-__device__ void blake2b(uint64_t *const __restrict__ out, const uint64_t *const __restrict__ in)
-{
-	uint64_t t[2] = { 0 };
-	uint64_t f[2] = { 0 };
-	uint64_t buf[BLAKE2B_BLOCKBYTES / 4] = { 0 };
-	size_t   buflen = 0;
-	uint64_t inlen = 80;
-	size_t   left = buflen;
-	size_t   fill = 2 * BLAKE2B_BLOCKBYTES - left;
-	uint64_t h[8] =
-	{
-		0x6A09E667F2BDC928, 0xbb67ae8584caa73b,
-		0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-		0x510e527fade682d1, 0x9b05688c2b3e6c1f,
-		0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
-	};
-
-	if(inlen > fill)
-	{
-		clmemcpy(buf + left / 8, in, fill); // Fill buffer
-		buflen += fill;
-		blake2b_compress(h, t, f, buf); // Compress
-		clmemcpy(buf, buf + BLAKE2B_BLOCKBYTES / 8, BLAKE2B_BLOCKBYTES); // Shift buffer left
-		buflen -= BLAKE2B_BLOCKBYTES;
-	}
-	else // inlen <= fill
-	{
-		clmemcpy(buf + left / 8, in, inlen);
-		buflen += inlen; // Be lazy, do not compress
-	}
-
-
-	t[0] += buflen;
-	f[0] = ~((uint64_t)0);
-	clmemset(buf + buflen / 8, 0, 2 * BLAKE2B_BLOCKBYTES - buflen); // Padding
-	blake2b_compress(h, t, f, buf);
-
-	clmemcpy(out, h, 32);
-}
-
 #define blocksize 512
 
 __global__ void __launch_bounds__(blocksize) nonceGrind(uint8_t *const __restrict__ headerIn, uint8_t *const __restrict__ hashOut, const uint8_t *const __restrict__ targ, uint8_t *const __restrict__ nonceOut)
@@ -231,12 +191,7 @@ __global__ void __launch_bounds__(blocksize) nonceGrind(uint8_t *const __restric
 
 	uint64_t *out = (uint64_t*)headerHash;
 	uint64_t *in = (uint64_t*)headerIn;
-	uint64_t t[2] = { 0 };
-	uint64_t f[2] = { 0 };
-	uint64_t buf[BLAKE2B_BLOCKBYTES / 4] = { 0 };
-	size_t   buflen = 0;
-	uint64_t inlen = 80;
-	size_t   fill = 2 * BLAKE2B_BLOCKBYTES;
+	uint64_t buf[32] = { 0 };
 	uint64_t h[8] =
 	{
 		0x6A09E667F2BDC928, 0xbb67ae8584caa73b,
@@ -245,44 +200,36 @@ __global__ void __launch_bounds__(blocksize) nonceGrind(uint8_t *const __restric
 		0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
 	};
 
-	if(inlen > fill)
-	{
-		clmemcpy(buf, in, fill); // Fill buffer
-		buflen += fill;
-		blake2b_compress(h, t, f, buf); // Compress
-		clmemcpy(buf, buf + BLAKE2B_BLOCKBYTES / 8, BLAKE2B_BLOCKBYTES); // Shift buffer left
-		buflen -= BLAKE2B_BLOCKBYTES;
-	}
-	else // inlen <= fill
-	{
-		clmemcpy(buf, in, inlen);
-		buflen += inlen; // Be lazy, do not compress
-	}
+#pragma unroll
+	for(i = 0; i < 10; i++)
+		buf[i] = in[i];
 
+#pragma unroll
+	for(i = 10; i < 32; i++)
+		buf[i] = 0;
 
-	t[0] += buflen;
-	f[0] = ~((uint64_t)0);
-	clmemset(buf + buflen / 8, 0, 2 * BLAKE2B_BLOCKBYTES - buflen); // Padding
-	blake2b_compress(h, t, f, buf);
+	blake2b_compress(h, buf);
 
-	clmemcpy(out, h, 32);
+#pragma unroll
+	for(i = 0; i < 4; i++)
+		out[i] = h[i];
 
 	// Compare header to target
 	z = 0;
-	while(targ[z] == out[z])
+	while(targ[z] == headerHash[z])
 	{
 		z++;
 	}
-	if(out[z] < targ[z])
+	if(headerHash[z] < targ[z])
 	{
 		// Transfer the output to global space.
 		for(i = 0; i < 8; i++)
 		{
-			nonceOut[i] = in[i + 32];
+			nonceOut[i] = headerIn[i + 32];
 		}
 		for(i = 0; i < 32; i++)
 		{
-			hashOut[i] = out[i];
+			hashOut[i] = headerHash[i];
 		}
 		return;
 	}
