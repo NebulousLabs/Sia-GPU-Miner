@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-__device__ void blake2b(uint8_t *out, const uint8_t *in);
+__device__ void blake2b(uint64_t *out, const uint64_t *in);
 
 // The kernel that grinds nonces until it finds a hash below the target
 __global__ void nonceGrind(uint8_t *headerIn, uint8_t *hashOut, uint8_t *targ, uint8_t *nonceOut)
@@ -31,7 +31,7 @@ __global__ void nonceGrind(uint8_t *headerIn, uint8_t *hashOut, uint8_t *targ, u
 	header[35] = id % 256;
 
 	// Hash the header
-	blake2b(headerHash, header);
+	blake2b((uint64_t*)headerHash, (uint64_t*)header);
 
 	// Compare header to target
 	z = 0;
@@ -71,13 +71,11 @@ __device__ void *clmemset(void *s, uint8_t c, size_t n)
 	return s;
 }
 
-__device__ void clmemcpy(void *dest, const void *src, size_t num)
+__device__ void clmemcpy(uint64_t *const __restrict__ dest, const uint64_t *const __restrict__ src, size_t num)
 {
-	char *dest8 = (char*)dest;
-	char *src8 = (char*)src;
-	for(int i = 0; i < num; i++)
+	for(int i = 0; i < num/8; i++)
 	{
-		dest8[i] = src8[i];
+		dest[i] = src[i];
 	}
 }
 
@@ -95,7 +93,7 @@ enum blake2b_constant
 	BLAKE2B_SALTBYTES = 16,
 	BLAKE2B_PERSONALBYTES = 16
 };
-
+/*
 #pragma pack(push, 1)
 ALIGN(64) typedef struct __blake2b_state
 {
@@ -111,17 +109,7 @@ ALIGN(64) typedef struct __blake2b_state
 // Streaming API
 int blake2b_update(blake2b_state *S, const uint8_t *in, uint64_t inlen);
 int blake2b_final(blake2b_state *S, uint8_t *out);
-
-__device__ static inline uint64_t load64(const void *src)
-{
-	return *(uint64_t *)(src);
-}
-
-__device__ static inline void store64(void *dst, uint64_t w)
-{
-	*(uint64_t *)(dst) = w;
-}
-
+*/
 #if __CUDA_ARCH__ >= 320
 __device__ __forceinline__
 uint64_t rotr64(const uint64_t value, const int offset)
@@ -181,26 +169,26 @@ __constant__ uint8_t blake2b_sigma[12][16] =
 	{ 14, 10, 4, 8, 9, 15, 13, 6, 1, 12, 0, 2, 11, 7, 5, 3 }
 };
 
-__device__ static void blake2b_compress(blake2b_state *S, const uint8_t block[BLAKE2B_BLOCKBYTES])
+__device__ static void blake2b_compress(uint64_t *const __restrict__ h, const uint64_t *const __restrict__ t, const uint64_t *const __restrict__ f, const uint64_t *const __restrict__ block)
 {
 	uint64_t m[16];
 	uint64_t v[16];
 	int i;
 
 	for(i = 0; i < 16; ++i)
-		m[i] = load64(block + i * sizeof(m[i]));
+		m[i] = block[i];
 
 	for(i = 0; i < 8; ++i)
-		v[i] = S->h[i];
+		v[i] = h[i];
 
-	v[8] = blake2b_IV[0];
-	v[9] = blake2b_IV[1];
-	v[10] = blake2b_IV[2];
-	v[11] = blake2b_IV[3];
-	v[12] = S->t[0] ^ blake2b_IV[4];
-	v[13] = S->t[1] ^ blake2b_IV[5];
-	v[14] = S->f[0] ^ blake2b_IV[6];
-	v[15] = S->f[1] ^ blake2b_IV[7];
+	v[8] = 0x6a09e667f3bcc908;
+	v[9] = 0xbb67ae8584caa73b;
+	v[10] = 0x3c6ef372fe94f82b;
+	v[11] = 0xa54ff53a5f1d36f1;
+	v[12] = t[0] ^ 0x510e527fade682d1;
+	v[13] = t[1] ^ 0x9b05688c2b3e6c1f;
+	v[14] = f[0] ^ 0x1f83d9abfb41bd6b;
+	v[15] = f[1] ^ 0x5be0cd19137e2179;
 
 #define G(r,i,a,b,c,d) \
 	do { \
@@ -240,47 +228,48 @@ __device__ static void blake2b_compress(blake2b_state *S, const uint8_t block[BL
 	ROUND(11, v);
 
 	for(i = 0; i < 8; ++i)
-		S->h[i] = S->h[i] ^ v[i] ^ v[i + 8];
+		h[i] = h[i] ^ v[i] ^ v[i + 8];
 
 #undef G
 #undef ROUND
 }
 
-__device__ void blake2b(uint8_t *out, const uint8_t *in)
+__device__ void blake2b(uint64_t *out, const uint64_t *in)
 {
-	blake2b_state S[1];
-
-	clmemset(S, 0, sizeof(blake2b_state));
-	for(int i = 0; i < 8; ++i) S->h[i] = blake2b_IV[i];
-	S->h[0] ^= 0x0000000001010020UL;
-
+	uint64_t t[2] = { 0 };
+	uint64_t f[2] = { 0 };
+	uint64_t buf[BLAKE2B_BLOCKBYTES/4] = { 0 };
+	size_t   buflen = 0;
 	uint64_t inlen = 80;
-	size_t left = S->buflen;
-	size_t fill = 2 * BLAKE2B_BLOCKBYTES - left;
+	size_t   left = buflen;
+	size_t   fill = 2 * BLAKE2B_BLOCKBYTES - left;
+	uint64_t h[8] =
+	{
+		0x6A09E667F2BDC928, 0xbb67ae8584caa73b,
+		0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
+		0x510e527fade682d1, 0x9b05688c2b3e6c1f,
+		0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
+	};
 
 	if(inlen > fill)
 	{
-		clmemcpy(S->buf + left, in, fill); // Fill buffer
-		S->buflen += fill;
-		blake2b_compress(S, S->buf); // Compress
-		clmemcpy(S->buf, S->buf + BLAKE2B_BLOCKBYTES, BLAKE2B_BLOCKBYTES); // Shift buffer left
-		S->buflen -= BLAKE2B_BLOCKBYTES;
+		clmemcpy(buf + left/8, in, fill); // Fill buffer
+		buflen += fill;
+		blake2b_compress(h, t, f, buf); // Compress
+		clmemcpy(buf, buf + BLAKE2B_BLOCKBYTES/8, BLAKE2B_BLOCKBYTES); // Shift buffer left
+		buflen -= BLAKE2B_BLOCKBYTES;
 	}
 	else // inlen <= fill
 	{
-		clmemcpy(S->buf + left, in, inlen);
-		S->buflen += inlen; // Be lazy, do not compress
+		clmemcpy(buf + left/8, in, inlen);
+		buflen += inlen; // Be lazy, do not compress
 	}
 
 
-	S->t[0] += S->buflen;
-	S->f[0] = ~((uint64_t)0);
-	clmemset(S->buf + S->buflen, 0, 2 * BLAKE2B_BLOCKBYTES - S->buflen); // Padding
-	blake2b_compress(S, S->buf);
+	t[0] += buflen;
+	f[0] = ~((uint64_t)0);
+	clmemset(buf + buflen/8, 0, 2 * BLAKE2B_BLOCKBYTES - buflen); // Padding
+	blake2b_compress(h, t, f, buf);
 
-	uint8_t buffer[BLAKE2B_OUTBYTES];
-	for(int i = 0; i < 8; ++i) // Output full hash to temp buffer
-		store64(buffer + sizeof(S->h[i]) * i, S->h[i]);
-
-	clmemcpy(out, buffer, 32);
+	clmemcpy(out, h, 32);
 }
