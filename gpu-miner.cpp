@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 	int c, cycles_per_iter;
 	char *port_number;
 	double hash_rate, seconds_per_iter;
-	uint32_t items_per_iter = 256 * 256 * 128;
+	uint32_t items_per_iter = 256 * 256 * 256 * 2;
 	// parse args
 	cycles_per_iter = 10;
 	seconds_per_iter = 10.0;
@@ -291,7 +291,6 @@ int main(int argc, char *argv[])
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 #endif
 	items_per_iter *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
-
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while(!quit)
