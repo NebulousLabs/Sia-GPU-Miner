@@ -46,12 +46,12 @@ void quitSignal(int __unused)
 }
 
 #if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
-#define WANT_BUILTIN_BSWAP
+#define LINUX_BSWAP
 #endif
 
 static inline uint32_t swap32(uint32_t x)
 {
-#ifdef WANT_BUILTIN_BSWAP
+#ifdef LINUX_BSWAP
 	return __builtin_bswap32(x);
 #else
 #ifdef _MSC_VER
@@ -90,7 +90,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	{
 		return 0;
 	}
-	/*
+
 	// Check for target corruption
 	if(target[0] != 0)
 	{
@@ -106,7 +106,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
 		printf("Waiting for problem to be resolved...");
 		fflush(stdout);
-	}*/
+	}
 	target_corrupt_flag = 0;
 
 	for(i = 0; i < cycles_per_iter; i++)
@@ -114,56 +114,52 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		blockHeader[38] = i / 256;
 		blockHeader[39] = i % 256;
 		// Copy input data to the memory buffer
-	ret = cudaMemcpyAsync(blockHeadermobj, blockHeader, 80, cudaMemcpyHostToDevice, cudastream);
-	if(ret != cudaSuccess)
-	{
-		printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1);
-	}
-	ret = cudaMemcpyAsync(headerHashmobj, headerHash, 32, cudaMemcpyHostToDevice, cudastream);
-	if(ret != cudaSuccess)
-	{
-		printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1);
-	}
-	ret = cudaMemcpyAsync(targmobj, target, 32, cudaMemcpyHostToDevice, cudastream);
-	if(ret != cudaSuccess)
-	{
-		printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
-	}
+		ret = cudaMemcpyAsync(blockHeadermobj, blockHeader, 80, cudaMemcpyHostToDevice, cudastream);
+		if(ret != cudaSuccess)
+		{
+			printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1);
+		}
+		ret = cudaMemcpyAsync(headerHashmobj, headerHash, 32, cudaMemcpyHostToDevice, cudastream);
+		if(ret != cudaSuccess)
+		{
+			printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1);
+		}
+		ret = cudaMemcpyAsync(targmobj, target, 32, cudaMemcpyHostToDevice, cudastream);
+		if(ret != cudaSuccess)
+		{
+			printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
+		}
 
-	// Execute OpenCL kernel as data parallel
-	uint32_t local_item_size = 256;
-	items_per_iter -= items_per_iter % 256;
+		extern void nonceGrindcuda(cudaStream_t, int, char *, char *, char *, char *);
+		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, targmobj, nonceOutmobj);
+		ret = cudaGetLastError();
+		if(ret != cudaSuccess)
+		{
+			cout << cudaGetErrorString(ret) << endl; return -1;
+		}
 
-	extern void nonceGrindcuda(cudaStream_t, int, int, char *, char *, char *, char *);
-	nonceGrindcuda(cudastream, items_per_iter, local_item_size, blockHeadermobj, headerHashmobj, targmobj, nonceOutmobj);
-	ret = cudaGetLastError();
-	if(ret != cudaSuccess)
-	{
-		cout << cudaGetErrorString(ret) << endl; return -1;
-	}
+		// Copy result to host
+		ret = cudaMemcpyAsync(headerHash, headerHashmobj, 32, cudaMemcpyDeviceToHost, cudastream);
+		if(ret != cudaSuccess)
+		{
+			printf("failed to read header hash from buffer: %d\n", ret); exit(1);
+		}
+		ret = cudaMemcpyAsync(nonceOut, nonceOutmobj, 8, cudaMemcpyDeviceToHost, cudastream);
+		if(ret != cudaSuccess)
+		{
+			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
+		}
+		cudaDeviceSynchronize();
 
-	// Copy result to host
-	ret = cudaMemcpyAsync(headerHash, headerHashmobj, 32, cudaMemcpyDeviceToHost, cudastream);
-	if(ret != cudaSuccess)
-	{
-		printf("failed to read header hash from buffer: %d\n", ret); exit(1);
-	}
-	ret = cudaMemcpyAsync(nonceOut, nonceOutmobj, 8, cudaMemcpyDeviceToHost, cudastream);
-	if(ret != cudaSuccess)
-	{
-		printf("failed to read nonce from buffer: %d\n", ret); exit(1);
-	}
-	cudaDeviceSynchronize();
-
-	// Did we find one?
-	if(memcmp(headerHash, target, 8) < 0)
-	{
-		// Copy nonce to header.
-		memcpy(blockHeader + 32, nonceOut, 8);
-		submit_header(curl, blockHeader);
-		blocks_mined++;
-		return -1;
-	}
+		// Did we find one?
+		if(memcmp(headerHash, target, 8) < 0)
+		{
+			// Copy nonce to header.
+			memcpy(blockHeader + 32, nonceOut, 8);
+			submit_header(curl, blockHeader);
+			blocks_mined++;
+			return -1;
+		}
 	}
 
 	// Hashrate is inaccurate if a block was found
@@ -181,13 +177,13 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 
 int main(int argc, char *argv[])
 {
-	int i, c, cycles_per_iter;
+	int c, cycles_per_iter;
 	char *port_number;
 	double hash_rate, seconds_per_iter;
-	uint32_t items_per_iter = 256 * 256 * 1;
+	uint32_t items_per_iter = 256 * 256 * 128;
 	// parse args
-	cycles_per_iter = 16;
-	seconds_per_iter = 2.0;
+	cycles_per_iter = 10;
+	seconds_per_iter = 10.0;
 	port_number = "9980";
 	while((c = getopt(argc, argv, "hc:s:p:")) != -1)
 	{
@@ -195,13 +191,12 @@ int main(int argc, char *argv[])
 		{
 		case 'h':
 			printf("\nUsage:\n\n");
-			printf("\t c - cycles per iter: Number of workloads hashing gets split into each iteration\n");
+			printf("\t c - cycles: number of hashing loops between API calls\n");
 			printf("\t default: %f\n", cycles_per_iter);
 			printf("\t\tIncrease this if your computer is freezing or locking up\n");
 			printf("\n");
-			printf("\t s - seconds per iter: Time between Sia API calls and hash rate updates\n");
+			printf("\t s - seconds between Sia API calls and hash rate updates\n");
 			printf("\t default: %f\n", seconds_per_iter);
-			printf("\t\tIncrease this if your miner is receiving invalid targets\n");
 			printf("\n");
 			exit(0);
 			break;
@@ -209,7 +204,7 @@ int main(int argc, char *argv[])
 			sscanf(optarg, "%d", &cycles_per_iter);
 			if(cycles_per_iter < 1 || cycles_per_iter > 1000)
 			{
-				printf("Cycles per iter must be at least 1 and no more than 1000\n");
+				printf("Cycles must be at least 1 and no more than 1000\n");
 				exit(1);
 			}
 			break;
@@ -254,10 +249,10 @@ int main(int argc, char *argv[])
 	}
 
 	ret = cudaStreamCreate(&cudastream);
-		if(ret != cudaSuccess)
-		{
-			cout << cudaGetErrorString(ret) << endl; return -1;
-		}
+	if(ret != cudaSuccess)
+	{
+		cout << cudaGetErrorString(ret) << endl; return -1;
+	}
 	// Create Buffer Objects
 	ret = cudaMalloc(&blockHeadermobj, 80);
 	if(ret != cudaSuccess)
@@ -280,7 +275,6 @@ int main(int argc, char *argv[])
 		printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1);
 	}
 
-	// Make each iteration take about 1 second
 #ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);

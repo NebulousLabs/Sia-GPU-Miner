@@ -1,65 +1,9 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-__device__ void blake2b(uint64_t *out, const uint64_t *in);
-
-// The kernel that grinds nonces until it finds a hash below the target
-__global__ void nonceGrind(uint8_t *headerIn, uint8_t *hashOut, uint8_t *targ, uint8_t *nonceOut)
-{
-	uint8_t header[80];
-	uint8_t headerHash[32];
-	uint8_t target[32];
-
-	headerHash[0] = 255;
-
-	int i, z;
-	for(i = 0; i < 32; i++)
-	{
-		target[i] = targ[i];
-		header[i] = headerIn[i];
-	}
-	for(i = 32; i < 80; i++)
-	{
-		header[i] = headerIn[i];
-	}
-
-	// Set nonce
-	const int id = blockDim.x * blockIdx.x + threadIdx.x;
-	header[32] = id / (256 * 256 * 256);
-	header[33] = id / (256 * 256);
-	header[34] = id / 256;
-	header[35] = id % 256;
-
-	// Hash the header
-	blake2b((uint64_t*)headerHash, (uint64_t*)header);
-
-	// Compare header to target
-	z = 0;
-	while(target[z] == headerHash[z])
-	{
-		z++;
-	}
-	if(headerHash[z] < target[z])
-	{
-		// Transfer the output to global space.
-		for(i = 0; i < 8; i++)
-		{
-			nonceOut[i] = header[i + 32];
-		}
-		for(i = 0; i < 32; i++)
-		{
-			hashOut[i] = headerHash[i];
-		}
-		return;
-	}
-}
-
-void nonceGrindcuda(cudaStream_t cudastream, int gridsize, int blocksize, char *blockHeader, char *headerHash, char *targ, char *nonceOut)
-{
-	nonceGrind << <gridsize, blocksize, 0, cudastream >> >((uint8_t*)blockHeader, (uint8_t*)headerHash, (uint8_t*)targ, (uint8_t*)nonceOut);
-}
-
-
+#ifdef __INTELLISENSE__
+#define __launch_bounds__(blocksize)
+#endif
 // Implementations of clmemset and memcopy
 __device__ void *clmemset(void *s, uint8_t c, size_t n)
 {
@@ -73,7 +17,7 @@ __device__ void *clmemset(void *s, uint8_t c, size_t n)
 
 __device__ void clmemcpy(uint64_t *const __restrict__ dest, const uint64_t *const __restrict__ src, size_t num)
 {
-	for(int i = 0; i < num/8; i++)
+	for(int i = 0; i < num / 8; i++)
 	{
 		dest[i] = src[i];
 	}
@@ -97,12 +41,12 @@ enum blake2b_constant
 #pragma pack(push, 1)
 ALIGN(64) typedef struct __blake2b_state
 {
-	uint64_t h[8];
-	uint64_t t[2];
-	uint64_t f[2];
-	uint8_t  buf[2 * BLAKE2B_BLOCKBYTES];
-	size_t   buflen;
-	uint8_t  last_node;
+uint64_t h[8];
+uint64_t t[2];
+uint64_t f[2];
+uint8_t  buf[2 * BLAKE2B_BLOCKBYTES];
+size_t   buflen;
+uint8_t  last_node;
 } blake2b_state;
 #pragma pack(pop)
 
@@ -200,7 +144,7 @@ __device__ static void blake2b_compress(uint64_t *const __restrict__ h, const ui
 		d = rotr64(d ^ a, 16); \
 		c = c + d; \
 		b = rotr64(b ^ c, 63); \
-		} while(0)
+			} while(0)
 
 #define ROUND(r,v)	\
 	do { \
@@ -212,7 +156,7 @@ __device__ static void blake2b_compress(uint64_t *const __restrict__ h, const ui
 		G(r,5,v[ 1],v[ 6],v[11],v[12]); \
 		G(r,6,v[ 2],v[ 7],v[ 8],v[13]); \
 		G(r,7,v[ 3],v[ 4],v[ 9],v[14]); \
-		} while(0)
+			} while(0)
 
 	ROUND(0, v);
 	ROUND(1, v);
@@ -234,11 +178,11 @@ __device__ static void blake2b_compress(uint64_t *const __restrict__ h, const ui
 #undef ROUND
 }
 
-__device__ void blake2b(uint64_t *out, const uint64_t *in)
+__device__ void blake2b(uint64_t *const __restrict__ out, const uint64_t *const __restrict__ in)
 {
 	uint64_t t[2] = { 0 };
 	uint64_t f[2] = { 0 };
-	uint64_t buf[BLAKE2B_BLOCKBYTES/4] = { 0 };
+	uint64_t buf[BLAKE2B_BLOCKBYTES / 4] = { 0 };
 	size_t   buflen = 0;
 	uint64_t inlen = 80;
 	size_t   left = buflen;
@@ -253,23 +197,100 @@ __device__ void blake2b(uint64_t *out, const uint64_t *in)
 
 	if(inlen > fill)
 	{
-		clmemcpy(buf + left/8, in, fill); // Fill buffer
+		clmemcpy(buf + left / 8, in, fill); // Fill buffer
 		buflen += fill;
 		blake2b_compress(h, t, f, buf); // Compress
-		clmemcpy(buf, buf + BLAKE2B_BLOCKBYTES/8, BLAKE2B_BLOCKBYTES); // Shift buffer left
+		clmemcpy(buf, buf + BLAKE2B_BLOCKBYTES / 8, BLAKE2B_BLOCKBYTES); // Shift buffer left
 		buflen -= BLAKE2B_BLOCKBYTES;
 	}
 	else // inlen <= fill
 	{
-		clmemcpy(buf + left/8, in, inlen);
+		clmemcpy(buf + left / 8, in, inlen);
 		buflen += inlen; // Be lazy, do not compress
 	}
 
 
 	t[0] += buflen;
 	f[0] = ~((uint64_t)0);
-	clmemset(buf + buflen/8, 0, 2 * BLAKE2B_BLOCKBYTES - buflen); // Padding
+	clmemset(buf + buflen / 8, 0, 2 * BLAKE2B_BLOCKBYTES - buflen); // Padding
 	blake2b_compress(h, t, f, buf);
 
 	clmemcpy(out, h, 32);
 }
+
+#define blocksize 512
+
+__global__ void __launch_bounds__(blocksize) nonceGrind(uint8_t *const __restrict__ headerIn, uint8_t *const __restrict__ hashOut, const uint8_t *const __restrict__ targ, uint8_t *const __restrict__ nonceOut)
+{
+	uint8_t headerHash[32];
+	int i, z;
+
+	// Set nonce
+	const uint32_t id = blockDim.x * blockIdx.x + threadIdx.x;
+	*((uint32_t*)(headerIn+32)) = id;
+
+	uint64_t *out = (uint64_t*)headerHash;
+	uint64_t *in = (uint64_t*)headerIn;
+	uint64_t t[2] = { 0 };
+	uint64_t f[2] = { 0 };
+	uint64_t buf[BLAKE2B_BLOCKBYTES / 4] = { 0 };
+	size_t   buflen = 0;
+	uint64_t inlen = 80;
+	size_t   fill = 2 * BLAKE2B_BLOCKBYTES;
+	uint64_t h[8] =
+	{
+		0x6A09E667F2BDC928, 0xbb67ae8584caa73b,
+		0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
+		0x510e527fade682d1, 0x9b05688c2b3e6c1f,
+		0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
+	};
+
+	if(inlen > fill)
+	{
+		clmemcpy(buf, in, fill); // Fill buffer
+		buflen += fill;
+		blake2b_compress(h, t, f, buf); // Compress
+		clmemcpy(buf, buf + BLAKE2B_BLOCKBYTES / 8, BLAKE2B_BLOCKBYTES); // Shift buffer left
+		buflen -= BLAKE2B_BLOCKBYTES;
+	}
+	else // inlen <= fill
+	{
+		clmemcpy(buf, in, inlen);
+		buflen += inlen; // Be lazy, do not compress
+	}
+
+
+	t[0] += buflen;
+	f[0] = ~((uint64_t)0);
+	clmemset(buf + buflen / 8, 0, 2 * BLAKE2B_BLOCKBYTES - buflen); // Padding
+	blake2b_compress(h, t, f, buf);
+
+	clmemcpy(out, h, 32);
+
+	// Compare header to target
+	z = 0;
+	while(targ[z] == out[z])
+	{
+		z++;
+	}
+	if(out[z] < targ[z])
+	{
+		// Transfer the output to global space.
+		for(i = 0; i < 8; i++)
+		{
+			nonceOut[i] = in[i + 32];
+		}
+		for(i = 0; i < 32; i++)
+		{
+			hashOut[i] = out[i];
+		}
+		return;
+	}
+}
+
+void nonceGrindcuda(cudaStream_t cudastream, int threads, char *blockHeader, char *headerHash, char *targ, char *nonceOut)
+{
+	nonceGrind << <threads / blocksize, blocksize, 0, cudastream >> >((uint8_t*)blockHeader, (uint8_t*)headerHash, (uint8_t*)targ, (uint8_t*)nonceOut);
+}
+
+
