@@ -6,11 +6,11 @@ static inline ulong rotr64( __const ulong w, __const unsigned c )
 // The kernel that grinds nonces until it finds a hash below the target
 __kernel void nonceGrind(__global uint *headerIn, __global uchar *hashOut, __global uint *targetIn, __global uchar *nonceOut) {
 	uchar header[256] = {0};
-	uchar target[32];
+	uchar target[16];
 
 	// Transfer inputs from global memory
 	int i;
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < 4; i++) {
 		*(uint*)(target + i * 4) = targetIn[i];
 	}
 	for (i = 0; i < 20; i++) {
