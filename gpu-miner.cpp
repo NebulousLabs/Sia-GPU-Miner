@@ -149,7 +149,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		{
 			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 		}
-		cudaDeviceSynchronize();
+		cudaStreamSynchronize(cudastream);
 
 		// Did we find one?
 		if(memcmp(headerHash, target, 8) < 0)
