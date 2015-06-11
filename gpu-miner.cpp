@@ -173,7 +173,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		if(*((uint64_t*)nonceOut) != 0)
 		{
 			// Copy nonce to header.
-			memcpy(blockHeader + 32, nonceOut, 8);
+			((uint64_t*)blockHeader)[4] = *((uint64_t*)nonceOut);
 			submit_header(curl, blockHeader);
 			blocks_mined++;
 			return -1;

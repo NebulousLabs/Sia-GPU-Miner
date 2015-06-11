@@ -2,11 +2,9 @@
 A GPU miner designed for mining siacoins. This miner runs in a command prompt and prints your hashrate along side the number of blocks you've mined.
 
 ## How to Use
-1) Build the miner by running `make`.
+1) Make sure you have a recent version of Sia installed and running.
 
-2) Make sure you have a recent version of Sia installed and running.
-
-3) Run the miner by running `./gpu-miner`. It will mine blocks until killed with Ctrl-C.
+2) Start the miner. It will mine blocks until killed with Ctrl-C.
 
 You can tweak the miner settings with three command-line arguments: `-s`, `-c`, and `-p`.
  `-s` controls the time between refreshing the hash rate, and `-c` controls the number of iterations performed between each refresh.
@@ -20,3 +18,4 @@ Finally, if you are running siad on a non-default API port, you can use `-p` to 
 *    Each Sia block takes about 10 minutes to mine.
 *    Once a block is mined, Sia waits for 144 confirmation blocks before the reward is added to your wallet, which takes about 24 hours.
 *    Sia currently doesn't have any mining pools. A p2pool portal is under development, and can be expected to be ready by the end of the summer.
+*    Sia discussion: https://bitcointalk.org/index.php?topic=1060294
