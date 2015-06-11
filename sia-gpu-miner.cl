@@ -7,6 +7,7 @@ static inline ulong rotr64( __const ulong w, __const unsigned c )
 __kernel void nonceGrind(__global uint *headerIn, __global ulong *hashOut, __global uchar *targetIn, __global ulong *nonceOut) {
 	int i;
 	uchar header[128] = {0};
+#pragma unroll
 	for (i = 0; i < 20; i++) {
 		*(uint*)(header + i * 4) = headerIn[i];
 	}
@@ -63,9 +64,9 @@ __kernel void nonceGrind(__global uint *headerIn, __global ulong *hashOut, __glo
 	ROUND( 9 );
 	ROUND( 10 );
 	ROUND( 11 );
-	ulong iv[8] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1, 0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179 };
-	for( i = 0; i < 8; ++i )
-		iv[i] = iv[i] ^ v[i] ^ v[i + 8];
+	ulong iv[2] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b };
+	iv[0] = iv[0] ^ v[0] ^ v[8];
+	iv[1] = iv[1] ^ v[1] ^ v[9];
 	uchar headerHash[64];
 	for( int i = 0; i < 8; ++i ) // Output full hash to temp buffer
 		*(ulong*)(headerHash + 8 * i) = iv[i];
