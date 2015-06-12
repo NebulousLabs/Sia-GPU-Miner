@@ -19,8 +19,16 @@
 #else
 #include <CL/cl.h>
 #endif
- 
-#define MAX_SOURCE_SIZE (0x200000)
+
+// Minimum intensity being less than 8 may break things
+#define MIN_INTENSITY		8
+#define MAX_INTENSITY		32
+#define DEFAULT_INTENSITY	16
+
+// TODO: Might wanna establish a min/max for this, too...
+#define DEFAULT_CPI			3
+
+#define MAX_SOURCE_SIZE 	(0x200000)
 
 cl_command_queue command_queue = NULL;
 cl_mem blockHeadermobj = NULL;
@@ -32,7 +40,7 @@ cl_int ret;
 
 CURL *curl;
 
-unsigned int blocks_mined = 0;
+unsigned int blocks_mined = 0, Intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
 int target_corrupt_flag = 0;
 
@@ -41,10 +49,10 @@ void quitSignal(int __unused) {
 	printf("\nCaught deadly signal, quitting...\n");
 }
 
-// Perform items_per_iter * cycles_per_iter hashes
+// Perform (2^Intensity) * cycles_per_iter hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
-double grindNonces(size_t items_per_iter, int cycles_per_iter) {
+double grindNonces(int cycles_per_iter) {
 	// Start timing this iteration
 	#ifdef __linux__
 	struct timespec begin, end;
@@ -78,7 +86,8 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		fflush(stdout);
 	}
 	target_corrupt_flag = 0;
-
+	size_t GlobalSize = 1 << (Intensity - 1);
+	
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
 	// get_block_for_work too often
@@ -96,9 +105,11 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
 
 		// Execute OpenCL kernel as data parallel
+		// Note that minimum intensity is 8, making the local
+		// worksize always divisible by the global worksize
 		size_t local_item_size = 256;
-		items_per_iter -= items_per_iter % 256;
-		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &items_per_iter, &local_item_size, 0, NULL, NULL);
+		
+		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &GlobalSize, &local_item_size, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
 		// Copy result to host
@@ -125,51 +136,155 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	double hash_rate = cycles_per_iter * items_per_iter / (run_time_seconds*1000000);
+	double hash_rate = cycles_per_iter * GlobalSize / (run_time_seconds*1000000);
 
 	return hash_rate;
 }
 
-int main(int argc, char *argv[]) {
+void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint PlatformIdx, cl_uint DeviceIdx)
+{
+	cl_uint PlatformCount, DeviceCount;
+	cl_platform_id *AllPlatforms;
+	cl_device_id *AllDevices;
+	cl_int ret;
+	
+	ret = clGetPlatformIDs(0, NULL, &PlatformCount);
+	if(ret != CL_SUCCESS)
+	{
+		printf("Failed to get number of OpenCL platforms with error code %d (clGetPlatformIDs).\n", ret);
+		exit(1);
+	}
+	
+	// If we don't exit here, the default platform ID chosen MUST be valid; it's zero.
+	// I return 0, because this isn't an error - there is simply nothing to do.
+	if(!PlatformCount)
+	{
+		printf("OpenCL is reporting no platforms available on the system. Nothing to do.\n");
+		exit(0);
+	}
+	
+	// Since the number of platforms returned is the number of indexes plus one,
+	// the default platform ID (zero), must exist. User may still specify something
+	// invalid, however, so check it.
+	if(PlatformCount <= PlatformIdx)
+	{
+		printf("Platform selected (%u) is the same as, or higher than, the number ", PlatformIdx);
+		printf("of platforms reported to exist by OpenCL on this system (%u). ", PlatformCount);
+		printf("Remember that the first platform has index 0!\n");
+		exit(1);
+	}
+	
+	AllPlatforms = (cl_platform_id *)malloc(sizeof(cl_platform_id) * PlatformCount);
+	
+	ret = clGetPlatformIDs(PlatformCount, AllPlatforms, NULL);
+	if(ret != CL_SUCCESS)
+	{
+		printf("Failed to retrieve OpenCL platform IDs with error code %d (clGetPlatformIDs).\n", ret);
+		exit(1);
+	}
+	
+	// Now fetch device ID list for this platform similarly to the fetch for the platform IDs.
+	// PlatformIdx has been verified to be within bounds.
+	ret = clGetDeviceIDs(AllPlatforms[PlatformIdx], CL_DEVICE_TYPE_GPU, 0, NULL, &DeviceCount);
+	if(ret != CL_SUCCESS)
+	{
+		printf("Failed to get number of OpenCL devices with error code %d (clGetDeviceIDs).\n", ret);
+		free(AllPlatforms);
+		exit(1);
+	}
+	
+	// If we have no devices, indicate this to the user
+	if(!DeviceCount)
+	{
+		printf("OpenCL is reporting no GPU devices available for chosen platform. Nothing to do.\n");
+		free(AllPlatforms);
+		exit(0);
+	}
+	
+	// Check that the device we've been asked to get does, in fact, exist...
+	if(DeviceCount <= DeviceIdx)
+	{
+		printf("Device selected (%u) is the same as, or higher than, the number ", DeviceIdx);
+		printf("of GPU devices reported to exist by OpenCL on the current platform (%u). ", DeviceCount); 
+		printf("Remember that the first device has index 0!\n");
+		free(AllPlatforms);
+		exit(1);
+	}
+	
+	AllDevices = (cl_device_id *)malloc(sizeof(cl_device_id) * DeviceCount);
+	
+	ret = clGetDeviceIDs(AllPlatforms[PlatformIdx], CL_DEVICE_TYPE_GPU, DeviceCount, AllDevices, NULL);
+	if(ret != CL_SUCCESS)
+	{
+		printf("Failed to retrieve OpenCL device IDs for selected platform with error code %d (clGetDeviceIDs).\n", ret);
+		free(AllPlatforms);
+		free(AllDevices);
+		exit(1);
+	}
+	
+	// Done. Return the platform ID and device ID object desired, free lists, and return.
+	*OCLPlatform = AllPlatforms[PlatformIdx];
+	*OCLDevice = AllDevices[DeviceIdx];
+}
+	
+int main(int argc, char *argv[])
+{
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
 	cl_program program = NULL;
-	cl_uint ret_num_devices;
-	cl_uint ret_num_platforms;
-
-	int i, c, cycles_per_iter;
+	cl_uint PlatformIdx = 0, DeviceIdx = 0;
+	int i, c;
+	unsigned cycles_per_iter;
 	char *port_number;
-	double hash_rate, seconds_per_iter;
-	size_t items_per_iter = 256*256*16;
+	double hash_rate;
 
 	// parse args
-	cycles_per_iter = 15;
-	seconds_per_iter = 1.0;
+	cycles_per_iter = DEFAULT_CPI;
 	port_number = "9980";
-	while ( (c = getopt(argc, argv, "hc:s:p:")) != -1) {
+	while ( (c = getopt(argc, argv, "hI:p:d:C:P:")) != -1) {
 		switch (c) {
 		case 'h':
 			printf("\nUsage:\n\n");
-			printf("\t c - cycles per iter: Number of workloads hashing gets split into each iteration\n");
-			printf("\t\tIncrease this if your computer is freezing or locking up\n");
+			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
+			printf("\t\tInterpretation is 2^intensity; the default is 17. Lower if GPU crashes or\n");
+			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
 			printf("\n");
-			printf("\t s - seconds per iter: Time between Sia API calls and hash rate updates\n");
-			printf("\t\tIncrease this if your miner is receiving invalid targets\n");
+			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
+			printf("\t\tyet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.\n");
+			printf("\n");
+			printf("\t d - OpenCL device ID: Self-explanatory; it's the GPU index. Note that different\n");
+			printf("\t\tOpenCL platforms will likely have different devices available. Default is 0.\n");
+			printf("\n");
+			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
+			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %ud.\n", DEFAULT_CPI);
 			printf("\n");
 			exit(0);
 			break;
-		case 'c':
-			sscanf(optarg, "%d", &cycles_per_iter);
-			if (cycles_per_iter < 1 || cycles_per_iter > 1000) {
-				printf("Cycles per iter must be at least 1 and no more than 1000\n");
-				exit(1);
+		case 'I':
+			Intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
+			
+			if(Intensity && (Intensity < MIN_INTENSITY) && (Intensity > MAX_INTENSITY))
+			{
+				printf("Intensity either set to zero, or invalid. Default will be used.\n");
+				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
+				Intensity = DEFAULT_INTENSITY;
 			}
 			break;
-		case 's':
-			sscanf(optarg, "%lf", &seconds_per_iter);
-			break;
 		case 'p':
+			// Again, zero return on error. Default is zero.
+			// I don't see  a problem here.
+			PlatformIdx = strtoul(optarg, NULL, 10);
+			break;
+		case 'd':
+			// See comment for previous option.
+			DeviceIdx = strtoul(optarg, NULL, 10);
+			break;
+		case 'C':
+			sscanf(optarg, "%ud", &cycles_per_iter);
+			if(!cycles_per_iter) cycles_per_iter = DEFAULT_CPI;
+			break;
+		case 'P':
 			port_number = strdup(optarg);
 			break;
 		}
@@ -182,7 +297,7 @@ int main(int argc, char *argv[]) {
 	curl = curl_easy_init();
 
 	// Load kernel source file
-	printf("Initializing...");
+	printf("Initializing...\n");
 	fflush(stdout);
 	FILE *fp;
 	const char fileName[] = "./sia-gpu-miner.cl";
@@ -198,11 +313,14 @@ int main(int argc, char *argv[]) {
 	fclose(fp);
 
 	// Get Platform/Device Information
-	ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
+	/*ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
 	if (ret != CL_SUCCESS) { printf("failed to get platform IDs: %d\n", ret); exit(1); }
 	ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
 	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
-
+	*/
+	
+	SelectOCLDevice(&platform_id, &device_id, PlatformIdx, DeviceIdx);
+	
 	// Create OpenCL Context
 	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 
@@ -268,30 +386,12 @@ int main(int argc, char *argv[]) {
 	}
 	printf("\n");
 
-	// Make each iteration take about 1 second
-	#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-	#else
-	clock_t startTime = clock();
-	#endif
-	grindNonces(items_per_iter, 1);
-	#ifdef __linux__
-	clock_gettime(CLOCK_REALTIME, &end);
-
-	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-	double run_time_seconds = nanosecondsElapsed * 1e-9;
-	#else
-	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-	#endif
-	items_per_iter *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
-
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while (!quit) {
 		// Repeat until no block is found
 		do {
-			hash_rate = grindNonces(items_per_iter, cycles_per_iter);
+			hash_rate = grindNonces(cycles_per_iter);
 		} while (hash_rate == -1);
 
 		if (!quit) {
