@@ -10,6 +10,7 @@ struct inData {
 };
 
 char *bfw_url, *submit_url;
+CURL *curl;
 
 void set_port(char *port) {
 	bfw_url = malloc(29 + strlen(port));
@@ -34,7 +35,14 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	return size*nmemb;
 }
 
-int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
+void init_network() {
+	curl =  curl_easy_init();
+	if (!curl) {
+		fprintf(stderr, "Error on curl_easy_init().\n");
+	}
+}
+
+int get_header_for_work(uint8_t *target, uint8_t *header) {
 	if (!curl) {
 		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
 		exit(1);
@@ -67,7 +75,7 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
 	return 0;
 }
 
-void submit_header(CURL *curl, uint8_t *header) {
+void submit_header(uint8_t *header) {
 	if (curl) {
 		CURLcode res;
 
@@ -89,4 +97,8 @@ void submit_header(CURL *curl, uint8_t *header) {
 		printf("Invalid curl object passed to submit_block()\n");
 		exit(1);
 	}
+}
+
+void free_network() {
+	curl_easy_cleanup(curl);
 }

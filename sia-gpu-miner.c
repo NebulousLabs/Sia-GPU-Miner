@@ -38,8 +38,6 @@ cl_mem nonceOutmobj = NULL;
 cl_kernel kernel = NULL;
 cl_int ret;
 
-CURL *curl;
-
 size_t local_item_size = 256;
 unsigned int blocks_mined = 0, intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
@@ -68,7 +66,7 @@ double grindNonces(int cycles_per_iter) {
 	uint8_t nonceOut[8] = {0};
 
 	// Get new block header and target
-	if (get_header_for_work(curl, target, blockHeader) != 0) {
+	if (get_header_for_work(target, blockHeader) != 0) {
 		return 0;
 	}
 
@@ -117,7 +115,7 @@ double grindNonces(int cycles_per_iter) {
 		if (memcmp(headerHash, target, 16) < 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
-			submit_header(curl, blockHeader);
+			submit_header(blockHeader);
 			blocks_mined++;
 			return -1;
 		}
@@ -277,9 +275,6 @@ int main(int argc, char *argv[]) {
 	// Set siad URL
 	set_port(port_number);
 
-	// Use curl to communicate with siad
-	curl = curl_easy_init();
-
 	// Load kernel source file
 	printf("Initializing...\n");
 	fflush(stdout);
@@ -373,6 +368,9 @@ int main(int argc, char *argv[]) {
 	}
 	printf("\n");
 
+	// Initialize network connection variables
+	init_network();
+
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while (!quit) {
@@ -399,7 +397,7 @@ int main(int argc, char *argv[]) {
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);	
 
-	curl_easy_cleanup(curl);
+	free_network();
 
 	free(source_str);
 
