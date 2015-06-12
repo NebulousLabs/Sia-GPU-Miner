@@ -53,15 +53,10 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	clock_t startTime = clock();
 	#endif
 
-	int i;
 	uint8_t blockHeader[80];
-	uint8_t headerHash[32];
-	uint8_t target[32];
-	uint8_t nonceOut[8]; // This is where the nonce that gets a low enough hash will be stored
-
-	memset(nonceOut, 0, 8);
-	memset(headerHash, 255, 32);
-	memset(target, 255, 32);
+	uint8_t headerHash[16] = {255};
+	uint8_t target[32] = {255};
+	uint8_t nonceOut[8] = {0};
 
 	// Get new block header and target
 	if (get_header_for_work(curl, target, blockHeader) != 0) {
@@ -69,6 +64,7 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 	}
 
 	// Check for target corruption
+	int i;
 	if (target[0] != 0 || target[1] != 0) {
 		if (target_corrupt_flag) {
 			return -1;
@@ -94,9 +90,9 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
-		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
-		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), target, 0, NULL, NULL);
+		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), target, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
 
 		// Execute OpenCL kernel as data parallel
@@ -106,13 +102,13 @@ double grindNonces(size_t items_per_iter, int cycles_per_iter) {
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
 		// Copy result to host
-		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 32 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
+		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
 		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
 
 		// Did we find one?
-		if (memcmp(headerHash, target, 8) < 0) {
+		if (memcmp(headerHash, target, 16) < 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			submit_header(curl, blockHeader);
@@ -189,7 +185,7 @@ int main(int argc, char *argv[]) {
 	printf("Initializing...");
 	fflush(stdout);
 	FILE *fp;
-	const char fileName[] = "./gpu-miner.cl";
+	const char fileName[] = "./sia-gpu-miner.cl";
 	size_t source_size;
 	char *source_str;
 	fp = fopen(fileName, "r");
@@ -217,7 +213,7 @@ int main(int argc, char *argv[]) {
 	blockHeadermobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 80 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create blockHeadermobj buffer: %d\n", ret); exit(1); }
 	headerHashmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 32 * sizeof(uint8_t), NULL, &ret);
-	if (ret != CL_SUCCESS) { printf("failed to create targmobj buffer: %d\n", ret); exit(1); }
+	if (ret != CL_SUCCESS) { printf("failed to create headerHashmobj buffer: %d\n", ret); exit(1); }
 	targmobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 32 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create targmobj buffer: %d\n", ret); exit(1); }
 	nonceOutmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 8 * sizeof(uint8_t), NULL, &ret);

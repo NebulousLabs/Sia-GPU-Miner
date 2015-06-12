@@ -1,17 +1,17 @@
 LFLAGS = -lOpenCL -lcurl
-CFLAGS = -std=c11 -Wall -pedantic
-OBJS = gpu-miner.o network.o
+CFLAGS = -std=c11 -Wall -pedantic -O2
+OBJS = sia-gpu-miner.o network.o
 CXX = gcc
 
 %.o: %.c network.h
 	$(CXX) -c -s $(CFLAGS) $< -o $@
 
-all: gpu-miner
+all: sia-gpu-miner
 
-gpu-miner: $(OBJS)
+sia-gpu-miner: $(OBJS)
 	$(CXX) $(OBJS) -o $@ $(LFLAGS)
 
 clean:
-	rm gpu-miner $(OBJS)
+	rm sia-gpu-miner $(OBJS)
 
-.PHONY: all gpu-miner clean
+.PHONY: all sia-gpu-miner clean
