@@ -92,9 +92,8 @@ double grindNonces(int cycles_per_iter) {
 	// By splitting them up inside this function, we also avoid calling
 	// get_block_for_work too often
 	for (i = 0; i < cycles_per_iter; i++) {
-		// Kernel sets nonce most significant bits, so we'll change least significant here
-		blockHeader[38] = i / 256;
-		blockHeader[39] = i % 256;
+		// Offset global ids so that each loop call tries a different set of hashes
+		uint64_t globalid_offset = i * global_item_size;
 
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
@@ -108,7 +107,7 @@ double grindNonces(int cycles_per_iter) {
 		// worksize always divisible by the local worksize
 		size_t local_item_size = 256;
 		
-		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
+		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, &globalid_offset, &global_item_size, &local_item_size, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
 		// Copy result to host
@@ -196,7 +195,7 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Check that the device we've been asked to get does, in fact, exist...
 	if(deviceCount <= deviceidx) {
 		printf("Device selected (%u) is the same as, or higher than, the number ", deviceidx);
-		printf("of GPU devices reported to exist by OpenCL on the current platform (%u). ", deviceCount); 
+		printf("of GPU devices reported to exist by OpenCL on the current platform (%u). ", deviceCount);
 		printf("Remember that the first device has index 0!\n");
 		free(platformids);
 		exit(1);
@@ -253,7 +252,7 @@ int main(int argc, char *argv[]) {
 		case 'I':
 			intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
 			
-			if(intensity || intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
+			if(intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 				printf("intensity either set to zero, or invalid. Default will be used.\n");
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
 				intensity = DEFAULT_INTENSITY;
