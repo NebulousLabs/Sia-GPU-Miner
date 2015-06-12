@@ -40,7 +40,7 @@ cl_int ret;
 
 CURL *curl;
 
-unsigned int blocks_mined = 0, Intensity = DEFAULT_INTENSITY;
+unsigned int blocks_mined = 0, intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
 int target_corrupt_flag = 0;
 
@@ -49,7 +49,7 @@ void quitSignal(int __unused) {
 	printf("\nCaught deadly signal, quitting...\n");
 }
 
-// Perform (2^Intensity) * cycles_per_iter hashes
+// Perform (2^intensity) * cycles_per_iter hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
 double grindNonces(int cycles_per_iter) {
@@ -86,7 +86,7 @@ double grindNonces(int cycles_per_iter) {
 		fflush(stdout);
 	}
 	target_corrupt_flag = 0;
-	size_t GlobalSize = 1 << Intensity;
+	size_t global_item_size = 1 << intensity;
 	
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -108,7 +108,7 @@ double grindNonces(int cycles_per_iter) {
 		// worksize always divisible by the local worksize
 		size_t local_item_size = 256;
 		
-		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &GlobalSize, &local_item_size, 0, NULL, NULL);
+		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
 		// Copy result to host
@@ -135,18 +135,18 @@ double grindNonces(int cycles_per_iter) {
 	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
 	#endif
-	double hash_rate = cycles_per_iter * GlobalSize / (run_time_seconds*1000000);
+	double hash_rate = cycles_per_iter * global_item_size / (run_time_seconds*1000000);
 
 	return hash_rate;
 }
 
-void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint PlatformIdx, cl_uint DeviceIdx) {
-	cl_uint PlatformCount, DeviceCount;
-	cl_platform_id *AllPlatforms;
-	cl_device_id *AllDevices;
+void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint platformid, cl_uint deviceidx) {
+	cl_uint platformCount, deviceCount;
+	cl_platform_id *platformids;
+	cl_device_id *deviceids;
 	cl_int ret;
 	
-	ret = clGetPlatformIDs(0, NULL, &PlatformCount);
+	ret = clGetPlatformIDs(0, NULL, &platformCount);
 	if(ret != CL_SUCCESS) {
 		printf("Failed to get number of OpenCL platforms with error code %d (clGetPlatformIDs).\n", ret);
 		exit(1);
@@ -154,7 +154,7 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	
 	// If we don't exit here, the default platform ID chosen MUST be valid; it's zero.
 	// I return 0, because this isn't an error - there is simply nothing to do.
-	if(!PlatformCount) {
+	if(!platformCount) {
 		printf("OpenCL is reporting no platforms available on the system. Nothing to do.\n");
 		exit(0);
 	}
@@ -162,59 +162,59 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Since the number of platforms returned is the number of indexes plus one,
 	// the default platform ID (zero), must exist. User may still specify something
 	// invalid, however, so check it.
-	if(PlatformCount <= PlatformIdx) {
-		printf("Platform selected (%u) is the same as, or higher than, the number ", PlatformIdx);
-		printf("of platforms reported to exist by OpenCL on this system (%u). ", PlatformCount);
+	if(platformCount <= platformid) {
+		printf("Platform selected (%u) is the same as, or higher than, the number ", platformid);
+		printf("of platforms reported to exist by OpenCL on this system (%u). ", platformCount);
 		printf("Remember that the first platform has index 0!\n");
 		exit(1);
 	}
 	
-	AllPlatforms = (cl_platform_id *)malloc(sizeof(cl_platform_id) * PlatformCount);
+	platformids = (cl_platform_id *)malloc(sizeof(cl_platform_id) * platformCount);
 	
-	ret = clGetPlatformIDs(PlatformCount, AllPlatforms, NULL);
+	ret = clGetPlatformIDs(platformCount, platformids, NULL);
 	if(ret != CL_SUCCESS) {
 		printf("Failed to retrieve OpenCL platform IDs with error code %d (clGetPlatformIDs).\n", ret);
 		exit(1);
 	}
 	
 	// Now fetch device ID list for this platform similarly to the fetch for the platform IDs.
-	// PlatformIdx has been verified to be within bounds.
-	ret = clGetDeviceIDs(AllPlatforms[PlatformIdx], CL_DEVICE_TYPE_GPU, 0, NULL, &DeviceCount);
+	// platformid has been verified to be within bounds.
+	ret = clGetDeviceIDs(platformids[platformid], CL_DEVICE_TYPE_GPU, 0, NULL, &deviceCount);
 	if(ret != CL_SUCCESS) {
 		printf("Failed to get number of OpenCL devices with error code %d (clGetDeviceIDs).\n", ret);
-		free(AllPlatforms);
+		free(platformids);
 		exit(1);
 	}
 	
 	// If we have no devices, indicate this to the user
-	if(!DeviceCount) {
+	if(!deviceCount) {
 		printf("OpenCL is reporting no GPU devices available for chosen platform. Nothing to do.\n");
-		free(AllPlatforms);
+		free(platformids);
 		exit(0);
 	}
 	
 	// Check that the device we've been asked to get does, in fact, exist...
-	if(DeviceCount <= DeviceIdx) {
-		printf("Device selected (%u) is the same as, or higher than, the number ", DeviceIdx);
-		printf("of GPU devices reported to exist by OpenCL on the current platform (%u). ", DeviceCount); 
+	if(deviceCount <= deviceidx) {
+		printf("Device selected (%u) is the same as, or higher than, the number ", deviceidx);
+		printf("of GPU devices reported to exist by OpenCL on the current platform (%u). ", deviceCount); 
 		printf("Remember that the first device has index 0!\n");
-		free(AllPlatforms);
+		free(platformids);
 		exit(1);
 	}
 	
-	AllDevices = (cl_device_id *)malloc(sizeof(cl_device_id) * DeviceCount);
+	deviceids = (cl_device_id *)malloc(sizeof(cl_device_id) * deviceCount);
 	
-	ret = clGetDeviceIDs(AllPlatforms[PlatformIdx], CL_DEVICE_TYPE_GPU, DeviceCount, AllDevices, NULL);
+	ret = clGetDeviceIDs(platformids[platformid], CL_DEVICE_TYPE_GPU, deviceCount, deviceids, NULL);
 	if(ret != CL_SUCCESS) {
 		printf("Failed to retrieve OpenCL device IDs for selected platform with error code %d (clGetDeviceIDs).\n", ret);
-		free(AllPlatforms);
-		free(AllDevices);
+		free(platformids);
+		free(deviceids);
 		exit(1);
 	}
 	
 	// Done. Return the platform ID and device ID object desired, free lists, and return.
-	*OCLPlatform = AllPlatforms[PlatformIdx];
-	*OCLDevice = AllDevices[DeviceIdx];
+	*OCLPlatform = platformids[platformid];
+	*OCLDevice = deviceids[deviceidx];
 }
 	
 int main(int argc, char *argv[]) {
@@ -222,7 +222,7 @@ int main(int argc, char *argv[]) {
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
 	cl_program program = NULL;
-	cl_uint PlatformIdx = 0, DeviceIdx = 0;
+	cl_uint platformid = 0, deviceidx = 0;
 	int i, c;
 	unsigned cycles_per_iter;
 	char *port_number;
@@ -251,22 +251,22 @@ int main(int argc, char *argv[]) {
 			exit(0);
 			break;
 		case 'I':
-			Intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
+			intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
 			
-			if(Intensity || Intensity < MIN_INTENSITY || Intensity > MAX_INTENSITY) {
-				printf("Intensity either set to zero, or invalid. Default will be used.\n");
+			if(intensity || intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
+				printf("intensity either set to zero, or invalid. Default will be used.\n");
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
-				Intensity = DEFAULT_INTENSITY;
+				intensity = DEFAULT_INTENSITY;
 			}
 			break;
 		case 'p':
 			// Again, zero return on error. Default is zero.
 			// I don't see  a problem here.
-			PlatformIdx = strtoul(optarg, NULL, 10);
+			platformid = strtoul(optarg, NULL, 10);
 			break;
 		case 'd':
 			// See comment for previous option.
-			DeviceIdx = strtoul(optarg, NULL, 10);
+			deviceidx = strtoul(optarg, NULL, 10);
 			break;
 		case 'C':
 			sscanf(optarg, "%ud", &cycles_per_iter);
@@ -307,7 +307,7 @@ int main(int argc, char *argv[]) {
 	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
 	*/
 	
-	SelectOCLDevice(&platform_id, &device_id, PlatformIdx, DeviceIdx);
+	selectOCLDevice(&platform_id, &device_id, platformid, deviceidx);
 	
 	// Create OpenCL Context
 	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
