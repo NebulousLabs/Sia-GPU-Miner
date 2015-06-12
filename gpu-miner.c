@@ -231,8 +231,7 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	*OCLDevice = AllDevices[DeviceIdx];
 }
 	
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
