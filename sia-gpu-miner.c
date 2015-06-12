@@ -40,6 +40,7 @@ cl_int ret;
 
 CURL *curl;
 
+size_t local_item_size = 256;
 unsigned int blocks_mined = 0, intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
 int target_corrupt_flag = 0;
@@ -103,10 +104,6 @@ double grindNonces(int cycles_per_iter) {
 		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), target, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
 
-		// Note that minimum intensity is 8, making the global
-		// worksize always divisible by the local worksize
-		size_t local_item_size = 256;
-		
 		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, &globalid_offset, &global_item_size, &local_item_size, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
@@ -298,16 +295,19 @@ int main(int argc, char *argv[]) {
 	source_str = (char *)malloc(MAX_SOURCE_SIZE);
 	source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
 	fclose(fp);
-
-	// Get Platform/Device Information
-	/*ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
-	if (ret != CL_SUCCESS) { printf("failed to get platform IDs: %d\n", ret); exit(1); }
-	ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_GPU, 1, &device_id, &ret_num_devices);
-	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
-	*/
 	
 	selectOCLDevice(&platform_id, &device_id, platformid, deviceidx);
 	
+	// Make sure the device can handle our local item size
+	size_t max_group_size = 0;
+	ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &max_group_size, NULL);
+	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
+	if (local_item_size > max_group_size) {
+		printf("Selected device cannot handle work groups larger than %lu.\n", local_item_size);
+		printf("Using work groups of size %lu instead.\n", max_group_size);
+		local_item_size = max_group_size;
+	}
+
 	// Create OpenCL Context
 	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 
