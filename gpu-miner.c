@@ -268,7 +268,7 @@ int main(int argc, char *argv[])
 		case 'I':
 			Intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
 			
-			if(Intensity && (Intensity < MIN_INTENSITY) && (Intensity > MAX_INTENSITY))
+			if(!Intensity || (Intensity < MIN_INTENSITY) || (Intensity > MAX_INTENSITY))
 			{
 				printf("Intensity either set to zero, or invalid. Default will be used.\n");
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
