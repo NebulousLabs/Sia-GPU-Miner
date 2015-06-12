@@ -86,7 +86,7 @@ double grindNonces(int cycles_per_iter) {
 		fflush(stdout);
 	}
 	target_corrupt_flag = 0;
-	size_t GlobalSize = 1 << (Intensity - 1);
+	size_t GlobalSize = 1 << Intensity;
 	
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -104,9 +104,8 @@ double grindNonces(int cycles_per_iter) {
 		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), target, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
 
-		// Execute OpenCL kernel as data parallel
-		// Note that minimum intensity is 8, making the local
-		// worksize always divisible by the global worksize
+		// Note that minimum intensity is 8, making the global
+		// worksize always divisible by the local worksize
 		size_t local_item_size = 256;
 		
 		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &GlobalSize, &local_item_size, 0, NULL, NULL);
@@ -141,24 +140,21 @@ double grindNonces(int cycles_per_iter) {
 	return hash_rate;
 }
 
-void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint PlatformIdx, cl_uint DeviceIdx)
-{
+void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint PlatformIdx, cl_uint DeviceIdx) {
 	cl_uint PlatformCount, DeviceCount;
 	cl_platform_id *AllPlatforms;
 	cl_device_id *AllDevices;
 	cl_int ret;
 	
 	ret = clGetPlatformIDs(0, NULL, &PlatformCount);
-	if(ret != CL_SUCCESS)
-	{
+	if(ret != CL_SUCCESS) {
 		printf("Failed to get number of OpenCL platforms with error code %d (clGetPlatformIDs).\n", ret);
 		exit(1);
 	}
 	
 	// If we don't exit here, the default platform ID chosen MUST be valid; it's zero.
 	// I return 0, because this isn't an error - there is simply nothing to do.
-	if(!PlatformCount)
-	{
+	if(!PlatformCount) {
 		printf("OpenCL is reporting no platforms available on the system. Nothing to do.\n");
 		exit(0);
 	}
@@ -166,8 +162,7 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Since the number of platforms returned is the number of indexes plus one,
 	// the default platform ID (zero), must exist. User may still specify something
 	// invalid, however, so check it.
-	if(PlatformCount <= PlatformIdx)
-	{
+	if(PlatformCount <= PlatformIdx) {
 		printf("Platform selected (%u) is the same as, or higher than, the number ", PlatformIdx);
 		printf("of platforms reported to exist by OpenCL on this system (%u). ", PlatformCount);
 		printf("Remember that the first platform has index 0!\n");
@@ -177,8 +172,7 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	AllPlatforms = (cl_platform_id *)malloc(sizeof(cl_platform_id) * PlatformCount);
 	
 	ret = clGetPlatformIDs(PlatformCount, AllPlatforms, NULL);
-	if(ret != CL_SUCCESS)
-	{
+	if(ret != CL_SUCCESS) {
 		printf("Failed to retrieve OpenCL platform IDs with error code %d (clGetPlatformIDs).\n", ret);
 		exit(1);
 	}
@@ -186,24 +180,21 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Now fetch device ID list for this platform similarly to the fetch for the platform IDs.
 	// PlatformIdx has been verified to be within bounds.
 	ret = clGetDeviceIDs(AllPlatforms[PlatformIdx], CL_DEVICE_TYPE_GPU, 0, NULL, &DeviceCount);
-	if(ret != CL_SUCCESS)
-	{
+	if(ret != CL_SUCCESS) {
 		printf("Failed to get number of OpenCL devices with error code %d (clGetDeviceIDs).\n", ret);
 		free(AllPlatforms);
 		exit(1);
 	}
 	
 	// If we have no devices, indicate this to the user
-	if(!DeviceCount)
-	{
+	if(!DeviceCount) {
 		printf("OpenCL is reporting no GPU devices available for chosen platform. Nothing to do.\n");
 		free(AllPlatforms);
 		exit(0);
 	}
 	
 	// Check that the device we've been asked to get does, in fact, exist...
-	if(DeviceCount <= DeviceIdx)
-	{
+	if(DeviceCount <= DeviceIdx) {
 		printf("Device selected (%u) is the same as, or higher than, the number ", DeviceIdx);
 		printf("of GPU devices reported to exist by OpenCL on the current platform (%u). ", DeviceCount); 
 		printf("Remember that the first device has index 0!\n");
@@ -214,8 +205,7 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	AllDevices = (cl_device_id *)malloc(sizeof(cl_device_id) * DeviceCount);
 	
 	ret = clGetDeviceIDs(AllPlatforms[PlatformIdx], CL_DEVICE_TYPE_GPU, DeviceCount, AllDevices, NULL);
-	if(ret != CL_SUCCESS)
-	{
+	if(ret != CL_SUCCESS) {
 		printf("Failed to retrieve OpenCL device IDs for selected platform with error code %d (clGetDeviceIDs).\n", ret);
 		free(AllPlatforms);
 		free(AllDevices);
@@ -227,8 +217,7 @@ void SelectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	*OCLDevice = AllDevices[DeviceIdx];
 }
 	
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
 	cl_context context = NULL;
@@ -247,7 +236,7 @@ int main(int argc, char *argv[])
 		case 'h':
 			printf("\nUsage:\n\n");
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
-			printf("\t\tInterpretation is 2^intensity; the default is 17. Lower if GPU crashes or\n");
+			printf("\t\tInterpretation is 2^intensity; the default is 16. Lower if GPU crashes or\n");
 			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
 			printf("\n");
 			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
@@ -264,8 +253,7 @@ int main(int argc, char *argv[])
 		case 'I':
 			Intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
 			
-			if(Intensity && (Intensity < MIN_INTENSITY) && (Intensity > MAX_INTENSITY))
-			{
+			if(Intensity || Intensity < MIN_INTENSITY || Intensity > MAX_INTENSITY) {
 				printf("Intensity either set to zero, or invalid. Default will be used.\n");
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
 				Intensity = DEFAULT_INTENSITY;
