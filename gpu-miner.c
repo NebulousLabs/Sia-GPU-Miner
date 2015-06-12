@@ -90,7 +90,7 @@ double grindNonces(int cycles_per_iter) {
 		fflush(stdout);
 	}
 	target_corrupt_flag = 0;
-	size_t GlobalSize = 1 << (Intensity - 1);
+	size_t GlobalSize = 1 << Intensity;
 	
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -251,8 +251,8 @@ int main(int argc, char *argv[])
 		case 'h':
 			printf("\nUsage:\n\n");
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
-			printf("\t\tInterpretation is 2^intensity; the default is 17. Lower if GPU crashes or\n");
-			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
+			printf("\t\tInterpretation is 2^intensity; the default is %d. Lower if GPU crashes or\n");
+			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n", DEFAULT_INTENSITY);
 			printf("\n");
 			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
 			printf("\t\tyet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.\n");
