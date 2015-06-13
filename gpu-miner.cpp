@@ -199,6 +199,8 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 int main(int argc, char *argv[])
 {
 	int c;
+	unsigned int deviceid = 0;
+	cudaDeviceProp deviceProp;
 	char *port_number = "9980";
 	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
@@ -206,7 +208,7 @@ int main(int argc, char *argv[])
 	// parse args
 	unsigned int cycles_per_iter = 15;
 	double seconds_per_iter = 10.0;
-	while((c = getopt(argc, argv, "hc:s:p:")) != -1)
+	while((c = getopt(argc, argv, "hc:s:p:d:")) != -1)
 	{
 		switch(c)
 		{
@@ -218,6 +220,8 @@ int main(int argc, char *argv[])
 			printf("\n");
 			printf("\t s - seconds between Sia API calls and hash rate updates\n");
 			printf("\t default: %f\n", seconds_per_iter);
+			printf("\n");
+			printf("\t d - device: the device id of the card you want to use");
 			printf("\n");
 			exit(0);
 			break;
@@ -234,6 +238,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'p':
 			port_number = _strdup(optarg);
+			break;
+		case 'd':
+			sscanf(optarg, "%u", &deviceid);
 			break;
 		}
 	}
@@ -255,15 +262,24 @@ int main(int argc, char *argv[])
 			printf("Driver error\n");
 		return -1;
 	}
+	for(int device = 0; device<deviceCount; ++device)
+	{
+		ret = cudaGetDeviceProperties(&deviceProp, device);
+		if(ret != cudaSuccess)
+		{
+			printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
+		}
+		printf("Device %d: %s (Compute Capability %d.%d)", device, deviceProp.name, deviceProp.major, deviceProp.minor);
+	}
+	printf("\nUsing device %d\n", deviceid);
 
-	ret = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
+	ret = cudaSetDevice(deviceid);
 	if(ret != cudaSuccess)
 	{
 		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 
-	// make it the active device
-	ret = cudaSetDevice(0);
+	ret = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
 	if(ret != cudaSuccess)
 	{
 		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
