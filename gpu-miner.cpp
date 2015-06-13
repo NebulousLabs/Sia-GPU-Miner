@@ -11,11 +11,11 @@ extern "C" {
 }
 #endif
 
-#include <ctime>
 #include <cstdio>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 using namespace std;
 #include <signal.h>
 //#include <unistd.h>
@@ -89,12 +89,8 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	*((uint64_t*)nonceOut) = 0;
 
 	// Start timing this iteration
-#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-#else
-	clock_t startTime = clock();
-#endif
+	chrono::time_point<chrono::system_clock> startTime, endTime;
+	startTime = chrono::system_clock::now();
 
 	int i;
 
@@ -162,6 +158,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		{
 			printf("failed to read header hash from buffer: %d\n", ret); exit(1);
 		}
+
 		ret = cudaMemcpyAsync(nonceOut, nonceOutmobj, 8, cudaMemcpyDeviceToHost, cudastream);
 		if(ret != cudaSuccess)
 		{
@@ -169,26 +166,27 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		}
 		cudaStreamSynchronize(cudastream);
 
-		// Did we find one?
 		if(*((uint64_t*)nonceOut) != 0)
 		{
-			// Copy nonce to header.
-			((uint64_t*)blockHeader)[4] = *((uint64_t*)nonceOut);
-			submit_header(curl, blockHeader);
-			blocks_mined++;
-			return -1;
+			i = 8;
+			while(headerHash[i] <= ((uint8_t*)target)[i] && i<32)
+				i++;
+			if(i == 32)
+			{
+
+				// Copy nonce to header.
+				((uint64_t*)blockHeader)[4] = *((uint64_t*)nonceOut);
+				submit_header(curl, blockHeader);
+				blocks_mined++;
+				return -1;
+			}
 		}
 	}
 
 	// Hashrate is inaccurate if a block was found
-#ifdef __linux__
-	clock_gettime(CLOCK_REALTIME, &end);
-	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-	double run_time_seconds = nanosecondsElapsed * 1e-9;
-#else
-	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-#endif
-	double hash_rate = cycles_per_iter * items_per_iter / (run_time_seconds * 1000000);
+	endTime=chrono::system_clock::now();
+	double elapsedTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count() / 1000000.0;
+	double hash_rate = cycles_per_iter * (double)items_per_iter / elapsedTime / 1000000;
 
 	return hash_rate;
 }
@@ -198,10 +196,10 @@ int main(int argc, char *argv[])
 	int c, cycles_per_iter;
 	char *port_number = nullptr;
 	double hash_rate, seconds_per_iter;
-	uint32_t items_per_iter = 256 * 256 * 256 * 2;
+	uint32_t items_per_iter = 256 * 256 * 256 * 16;
 
 	// parse args
-	cycles_per_iter = 10;
+	cycles_per_iter = 15;
 	seconds_per_iter = 10.0;
 	port_number = "9980";
 	while((c = getopt(argc, argv, "hc:s:p:")) != -1)
@@ -294,22 +292,15 @@ int main(int argc, char *argv[])
 		printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1);
 	}
 
-#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-#else
-	clock_t startTime = clock();
-#endif
-	grindNonces(items_per_iter, 1);
-#ifdef __linux__
-	clock_gettime(CLOCK_REALTIME, &end);
+	chrono::time_point<chrono::system_clock> startTime, endTime;
+	startTime = chrono::system_clock::now();
 
-	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-	double run_time_seconds = nanosecondsElapsed * 1e-9;
-#else
-	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-#endif
-	items_per_iter *= (seconds_per_iter / run_time_seconds) / cycles_per_iter;
+	grindNonces(items_per_iter, 1);
+
+	endTime=chrono::system_clock::now();
+	double elapsedTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count() / 1000000.0;
+	items_per_iter *= (seconds_per_iter / elapsedTime) / cycles_per_iter;
+
 	// Grind nonces until SIGINT
 	signal(SIGINT, quitSignal);
 	while(!quit)
