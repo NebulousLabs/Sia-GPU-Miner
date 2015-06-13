@@ -18,6 +18,11 @@ extern "C" {
 #include <chrono>
 using namespace std;
 #include <signal.h>
+#ifdef _MSC_VER
+#include "VisualStudio/getopt/getopt.h"
+#else
+#include <getopt.h>
+#endif
 //#include <unistd.h>
 #include <cuda_runtime.h>
 
@@ -193,15 +198,14 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 
 int main(int argc, char *argv[])
 {
-	int c, cycles_per_iter;
-	char *port_number = nullptr;
-	double hash_rate, seconds_per_iter;
+	int c;
+	char *port_number = "9980";
+	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
 
 	// parse args
-	cycles_per_iter = 15;
-	seconds_per_iter = 10.0;
-	port_number = "9980";
+	unsigned int cycles_per_iter = 15;
+	double seconds_per_iter = 10.0;
 	while((c = getopt(argc, argv, "hc:s:p:")) != -1)
 	{
 		switch(c)
