@@ -1,20 +1,21 @@
 # Sia-GPU-Miner
-A GPU miner designed for mining siacoins. This miner runs in a command prompt and prints your hashrate along side the number of blocks you've mined.
+Miner with some OpenCL initialization fixed, and several options to allow the user decent control.
 
 ## How to Use
-1) Build the miner by running `make`.
+Usage:
 
-2) Make sure you have a recent version of Sia installed and running.
+ I - intensity: This is the amount of work sent to the GPU in one batch.
+	Interpretation is 2^intensity; the default is 16. Lower if GPU crashes or
+	if more desktop interactivity is desired. Raising it may improve performance.
 
-3) Run the miner by running `./gpu-miner`. It will mine blocks until killed with Ctrl-C.
+ p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,
+	yet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.
 
-You can tweak the miner settings with three command-line arguments: `-s`, `-c`, and `-p`.
- `-s` controls the time between refreshing the hash rate, and `-c` controls the number of iterations performed between each refresh.
-For example, `./gpu-miner -s 0.2 -c 100` will perform 100 iterations every 0.2 seconds, while `./gpu-miner` will perform 1 iteration every 10 seconds.
-**Note that "1 iteration" is not a constant amount of work. If -c is 10, each iteration will perform 10x less work than with -c 1.**
-So while these parameters can have a minor effect on your hash rate, their primary function is to reduce the strain on your GPU. This can prevent your GPU from crashing and prevent your computer from freezing during mining.
+ d - OpenCL device ID: Self-explanatory; it's the GPU index. Note that different
+	OpenCL platforms will likely have different devices available. Default is 0.
 
-Finally, if you are running siad on a non-default API port, you can use `-p` to specify the port to communicate on.
+ C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates
+	Increase this if your miner is receiving invalid targets. Default is 3.
 
 ## Notes
 *    Each Sia block takes about 10 minutes to mine.
