@@ -78,14 +78,9 @@ double grindNonces(int cycles_per_iter) {
 		}
 		target_corrupt_flag = 1;
 		printf("Received corrupt target from Sia\n");
-		// API call may have returned an error string
-		printf("Possible error text:\n");
-		for (i = 0; i < 32 && target[++i];) {
-			printf("%c", target[i-1]);
-		}
-		printf("\n");
 		printf("Waiting for problem to be resolved...");
 		fflush(stdout);
+		return -1;
 	}
 	target_corrupt_flag = 0;
 	size_t global_item_size = 1 << intensity;

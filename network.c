@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <curl/curl.h>
 
 #include "network.h"
 
@@ -11,6 +12,16 @@ struct inData {
 
 char *bfw_url, *submit_url;
 CURL *curl;
+
+int check_http_response(CURL *curl) {
+	long http_code = 0;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	if (http_code != 200) {
+		fprintf(stderr, "HTTP error %lu", http_code);
+		return 1;
+	}
+	return 0;
+}
 
 void set_port(char *port) {
 	bfw_url = malloc(29 + strlen(port));
@@ -63,8 +74,11 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		exit(1);
 	}
+	if (check_http_response(curl)) {
+		return 1;
+	}
 	if (in.len != 112) {
-		fprintf(stderr, "curl did not receive correct bytes (got %zu, expected 112)\n", in.len);
+		fprintf(stderr, "curl did not receive correct bytes (got %lu, expected 112)\n", in.len);
 		return 1;
 	}
 
@@ -72,31 +86,29 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	memcpy(target, in.bytes,     32);
 	memcpy(header, in.bytes+32,  80);
 
+	free(in.bytes);
+
 	return 0;
 }
 
 void submit_header(uint8_t *header) {
-	if (curl) {
-		CURLcode res;
+	CURLcode res;
 
-		curl_easy_reset(curl);
-		curl_easy_setopt(curl, CURLOPT_URL, submit_url);
-		curl_easy_setopt(curl, CURLOPT_POST, 1);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, 80);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
-		// Prevent printing to stdout
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_reset(curl);
+	curl_easy_setopt(curl, CURLOPT_URL, submit_url);
+	curl_easy_setopt(curl, CURLOPT_POST, 1);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, 80);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
+	// Prevent printing to stdout
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
 
-		res = curl_easy_perform(curl);
-		if (res != CURLE_OK) {
-			fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-			exit(1);
-		}
-	} else {
-		printf("Invalid curl object passed to submit_block()\n");
+	res = curl_easy_perform(curl);
+	if (res != CURLE_OK) {
+		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		exit(1);
 	}
+	check_http_response(curl);
 }
 
 void free_network() {

@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <curl/curl.h>
 
 void set_port(char *port);
 void init_network();
