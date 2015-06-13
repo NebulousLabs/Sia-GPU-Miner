@@ -61,7 +61,6 @@ double grindNonces(int cycles_per_iter) {
 	#endif
 
 	uint8_t blockHeader[80];
-	uint8_t headerHash[16] = {255};
 	uint8_t target[32] = {255};
 	uint8_t nonceOut[8] = {0};
 
@@ -84,7 +83,12 @@ double grindNonces(int cycles_per_iter) {
 	}
 	target_corrupt_flag = 0;
 	size_t global_item_size = 1 << intensity;
-	
+
+	// Copy target to header
+	for (i = 0; i < 8; i++) {
+		blockHeader[i + 32] = target[i];
+	}
+
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
 	// get_block_for_work too often
@@ -95,22 +99,18 @@ double grindNonces(int cycles_per_iter) {
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
-		ret = clEnqueueWriteBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1); }
-		ret = clEnqueueWriteBuffer(command_queue, targmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), target, 0, NULL, NULL);
+		ret = clEnqueueWriteBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
 
 		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, &globalid_offset, &global_item_size, &local_item_size, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
 
 		// Copy result to host
-		ret = clEnqueueReadBuffer(command_queue, headerHashmobj, CL_TRUE, 0, 16 * sizeof(uint8_t), headerHash, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to read header hash from buffer: %d\n", ret); exit(1); }
 		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
 
 		// Did we find one?
-		if (memcmp(headerHash, target, 16) < 0) {
+		if (nonceOut[0] != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			submit_header(blockHeader);
@@ -356,8 +356,8 @@ int main(int argc, char *argv[]) {
 	kernel = clCreateKernel(program, "nonceGrind", &ret);
 
 	// Set OpenCL kernel arguments
-	void *args[] = { &blockHeadermobj, &headerHashmobj, &targmobj, &nonceOutmobj };
-	for (i = 0; i < 4; i++) {
+	void *args[] = { &blockHeadermobj, &nonceOutmobj };
+	for (i = 0; i < 2; i++) {
 		ret = clSetKernelArg(kernel, i, sizeof(cl_mem), args[i]);
 		if (ret != CL_SUCCESS) {
 			printf("failed to set kernel arg %d (error code %d)\n", i, ret);

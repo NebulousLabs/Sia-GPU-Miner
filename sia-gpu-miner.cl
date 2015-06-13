@@ -1,17 +1,20 @@
 static inline ulong rotr64( __const ulong w, __const unsigned c ) { return ( w >> c ) | ( w << ( 64 - c ) ); }
 
 // The kernel that grinds nonces until it finds a hash below the target
-__kernel void nonceGrind(__global ulong *headerIn, __global ulong *hashOut, __global uchar *targetIn, __global ulong *nonceOut) {
+__kernel void nonceGrind(__global ulong *headerIn, __global ulong *nonceOut) {
 	ulong m[16] = {0};
 #pragma unroll
 	for(int i = 0; i < 10; i++ )
 		m[i] = headerIn[i];
 
-	uchar nonce[8] = {0};
-	*(ulong*)(nonce) = headerIn[4];
-	*(uint*)(nonce) = get_global_id(0);
-	m[4] = *(ulong*)(nonce);             // Removing this breaks the program.
-	*(uint*)(m + 32) = get_global_id(0); // Removing this does not. (Why?)
+	// Copy headerIn[4] to target
+	uchar targetIn[8];
+	ulong temp = headerIn[4];
+	uchar *tpointer = (uchar*)&temp;
+	for (int i = 0; i < 8; i++) {
+		targetIn[i] = tpointer[i];
+	}
+	m[4] = get_global_id(0);
 
 	ulong v[16] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
                     0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179,
@@ -77,9 +80,7 @@ __kernel void nonceGrind(__global ulong *headerIn, __global ulong *hashOut, __gl
 	}
 	if (headerHash[i] < targetIn[i]) {
 		// Transfer the output to global space.
-		nonceOut[0] = *(ulong*)(nonce);
-		hashOut[0] = iv[0];
-		hashOut[1] = iv[1];
+		nonceOut[0] = m[4];
 		return;
 	}
 }
