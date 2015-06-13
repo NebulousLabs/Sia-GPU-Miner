@@ -86,7 +86,7 @@ double grindNonces(int cycles_per_iter) {
 
 	// Copy target to header
 	for (i = 0; i < 8; i++) {
-		blockHeader[i + 32] = target[i];
+		blockHeader[i + 32] = target[7-i];
 	}
 
 	// By doing a bunch of low intensity calls, we prevent freezing

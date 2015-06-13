@@ -8,13 +8,8 @@ __kernel void nonceGrind(__global ulong *headerIn, __global ulong *nonceOut) {
 		m[i] = headerIn[i];
 
 	// Copy headerIn[4] to target
-	uchar targetIn[8];
-	ulong temp = headerIn[4];
-	uchar *tpointer = (uchar*)&temp;
-	for (int i = 0; i < 8; i++) {
-		targetIn[i] = tpointer[i];
-	}
-	m[4] = get_global_id(0);
+	ulong target = headerIn[4];
+	m[4] = (ulong)get_global_id(0);
 
 	ulong v[16] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
                     0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179,
@@ -68,18 +63,14 @@ __kernel void nonceGrind(__global ulong *headerIn, __global ulong *nonceOut) {
 #undef ROUND
 
 	// Surely there is a way to merge iv and headerHash, but I haven't figured it out.
-	int i = 0;
 	ulong iv[2] = { 0x6a09e667f2bdc928, 0xbb67ae8584caa73b };
 	iv[0] = iv[0] ^ v[0] ^ v[8];
 	iv[1] = iv[1] ^ v[1] ^ v[9];
-	uchar headerHash[64];
-	*(ulong*)(headerHash) = iv[0];
-	*(ulong*)(headerHash + 8) = iv[1];
-	while (targetIn[i] == headerHash[i]) {
-		i++;
-	}
-	if (headerHash[i] < targetIn[i]) {
-		// Transfer the output to global space.
+
+	// Convert endianness
+	ulong leiv = as_ulong(as_uchar8(iv[0]).s76543210);
+
+	if (leiv < target) {
 		nonceOut[0] = m[4];
 		return;
 	}
