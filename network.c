@@ -1,3 +1,5 @@
+#define __USE_MINGW_ANSI_STDIO	1
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -56,7 +58,7 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
 		exit(1);
 	}
 	if (in.len != 112) {
-		fprintf(stderr, "curl did not receive correct bytes (got %zu, expected 112)\n", in.len);
+		fprintf(stderr, "curl did not receive correct bytes (got %llu, expected 112)\n", in.len);
 		return 1;
 	}
 

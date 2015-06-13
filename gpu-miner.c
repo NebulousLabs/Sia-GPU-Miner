@@ -250,8 +250,8 @@ int main(int argc, char *argv[]) {
 		case 'h':
 			printf("\nUsage:\n\n");
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
-			printf("\t\tInterpretation is 2^intensity; the default is %d. Lower if GPU crashes or\n");
-			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n", DEFAULT_INTENSITY);
+			printf("\t\tInterpretation is 2^intensity; the default is %u. Lower if GPU crashes or\n", DEFAULT_INTENSITY);
+			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
 			printf("\n");
 			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
 			printf("\t\tyet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.\n");
@@ -260,7 +260,7 @@ int main(int argc, char *argv[]) {
 			printf("\t\tOpenCL platforms will likely have different devices available. Default is 0.\n");
 			printf("\n");
 			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
-			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %ud.\n", DEFAULT_CPI);
+			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %u.\n", DEFAULT_CPI);
 			printf("\n");
 			exit(0);
 			break;
