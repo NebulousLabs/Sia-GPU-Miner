@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
 		case 'h':
 			printf("\nUsage:\n\n");
 			printf("\t c - cycles: number of hashing loops between API calls\n");
-			printf("\t default: %f\n", cycles_per_iter);
+			printf("\t default: %d\n", cycles_per_iter);
 			printf("\t\tIncrease this if your computer is freezing or locking up\n");
 			printf("\n");
 			printf("\t s - seconds between Sia API calls and hash rate updates\n");
@@ -274,7 +274,7 @@ int main(int argc, char *argv[])
 	{
 		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
-
+	cudaDeviceReset();
 	ret = cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync);
 	if(ret != cudaSuccess)
 	{
