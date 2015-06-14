@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
 		{
 			printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
-		printf("Device %d: %s (Compute Capability %d.%d)", device, deviceProp.name, deviceProp.major, deviceProp.minor);
+		printf("Device %d: %s (Compute Capability %d.%d)\n", device, deviceProp.name, deviceProp.major, deviceProp.minor);
 	}
 	printf("\nUsing device %d\n", deviceid);
 
