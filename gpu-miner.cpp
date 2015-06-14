@@ -30,10 +30,9 @@ using namespace std;
 
 #define MAX_SOURCE_SIZE (0x200000)
 
-char *blockHeadermobj = nullptr;
+uint64_t *blockHeadermobj = nullptr;
 char *headerHashmobj = nullptr;
-char *targmobj = nullptr;
-char *nonceOutmobj = nullptr;
+uint64_t *nonceOutmobj = nullptr;
 cudaError_t ret;
 cudaStream_t cudastream;
 
@@ -139,19 +138,14 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		{
 			printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1);
 		}
-		ret = cudaMemcpyAsync(targmobj, target, 32, cudaMemcpyHostToDevice, cudastream);
-		if(ret != cudaSuccess)
-		{
-			printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
-		}
 		ret = cudaMemcpyAsync(nonceOutmobj, nonceOut, 8, cudaMemcpyHostToDevice, cudastream);
 		if(ret != cudaSuccess)
 		{
 			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 		}
 
-		extern void nonceGrindcuda(cudaStream_t, int, char *, char *, char *, char *);
-		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, targmobj, nonceOutmobj);
+		extern void nonceGrindcuda(cudaStream_t, int, uint64_t *, char *, uint64_t *);
+		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, nonceOutmobj);
 		ret = cudaGetLastError();
 		if(ret != cudaSuccess)
 		{
@@ -302,11 +296,6 @@ int main(int argc, char *argv[])
 	if(ret != cudaSuccess)
 	{
 		printf("failed to create headerHashmobj buffer: %d\n", ret); exit(1);
-	}
-	ret = cudaMalloc(&targmobj, 32);
-	if(ret != cudaSuccess)
-	{
-		printf("failed to create targmobj buffer: %d\n", ret); exit(1);
 	}
 	ret = cudaMalloc(&nonceOutmobj, 8);
 	if(ret != cudaSuccess)
