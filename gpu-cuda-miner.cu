@@ -69,24 +69,20 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(uint64_t *const __res
 	uint32_t nonce = 0;
 
 	uint64_t *headerHash64 = (uint64_t*)headerHash8;
-	uint64_t h[8] =
-	{
-		0x6A09E667F2BDC928, 0xbb67ae8584caa73b,
-		0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-	};
+	uint64_t h[4];
 
 	uint64_t v[16], v1[16];
 
-	v1[0] = h[0] + h[4] + headerIn[0]; v1[12] = rotr64(0x510E527FADE68281 ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908 + v1[12]; v1[4] = rotr64(h[4] ^ v1[8], 24);
+	v1[0] = 0x6A09E667F2BDC928u + 0x510e527fade682d1u + headerIn[0]; v1[12] = rotr64(0x510E527FADE68281u ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908u + v1[12]; v1[4] = rotr64(0x510e527fade682d1u ^ v1[8], 24);
 	v1[0] = v1[0] + v1[4] + headerIn[1]; v1[12] = rotr64(v1[12] ^ v1[0], 16); v1[8] = v1[8] + v1[12]; v1[4] = rotr64(v1[4] ^ v1[8], 63);
-	v1[1] = h[1] + h[5] + headerIn[2]; v1[13] = rotr64(0x9b05688c2b3e6c1f ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73b + v1[13]; v1[5] = rotr64(h[5] ^ v1[9], 24);
+	v1[1] = 0xbb67ae8584caa73bu + 0x9b05688c2b3e6c1fu + headerIn[2]; v1[13] = rotr64(0x9b05688c2b3e6c1fu ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bu + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1fu ^ v1[9], 24);
 	v1[1] = v1[1] + v1[5] + headerIn[3]; v1[13] = rotr64(v1[13] ^ v1[1], 16); v1[9] = v1[9] + v1[13]; v1[5] = rotr64(v1[5] ^ v1[9], 63);
 	for(i = 0; i < npt; i++)
 	{
 		((uint32_t*)headerIn)[8] = id + i;
-		v[2] = h[2] + h[6] + headerIn[4]; v[14] = rotr64(0xE07C265404BE4294 ^ v[2], 32); v[10] = 0x3c6ef372fe94f82b + v[14]; v[6] = rotr64(h[6] ^ v[10], 24);
+		v[2] = 0x3c6ef372fe94f82bu + 0x1f83d9abfb41bd6bu + headerIn[4]; v[14] = rotr64(0xE07C265404BE4294u ^ v[2], 32); v[10] = 0x3c6ef372fe94f82bu + v[14]; v[6] = rotr64(0x1f83d9abfb41bd6bu ^ v[10], 24);
 		v[2] = v[2] + v[6] + headerIn[5]; v[14] = rotr64(v[14] ^ v[2], 16); v[10] = v[10] + v[14]; v[6] = rotr64(v[6] ^ v[10], 63);
-		v[3] = h[3] + h[7] + headerIn[6]; v[15] = rotr64(0x5be0cd19137e2179 ^ v[3], 32); v[11] = 0xa54ff53a5f1d36f1 + v[15]; v[7] = rotr64(h[7] ^ v[11], 24);
+		v[3] = 0xa54ff53a5f1d36f1u + 0x5be0cd19137e2179u + headerIn[6]; v[15] = rotr64(0x5be0cd19137e2179u ^ v[3], 32); v[11] = 0xa54ff53a5f1d36f1u + v[15]; v[7] = rotr64(0x5be0cd19137e2179u ^ v[11], 24);
 		v[3] = v[3] + v[7] + headerIn[7]; v[15] = rotr64(v[15] ^ v[3], 16); v[11] = v[11] + v[15]; v[7] = rotr64(v[7] ^ v[11], 63);
 		v[0] = v1[0] + v1[5] + headerIn[8]; v[15] = rotr64(v[15] ^ v[0], 32); v[10] = v[10] + v[15]; v[5] = rotr64(v1[5] ^ v[10], 24);
 		v[0] = v[0] + v[5] + headerIn[9]; v[15] = rotr64(v[15] ^ v[0], 16); v[10] = v[10] + v[15]; v[5] = rotr64(v[5] ^ v[10], 63);
