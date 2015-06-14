@@ -91,8 +91,6 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		init = true;
 	}
 
-	*((uint64_t*)nonceOut) = 0;
-
 	// Start timing this iteration
 	chrono::time_point<chrono::system_clock> startTime, endTime;
 	startTime = chrono::system_clock::now();
@@ -122,11 +120,13 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		fflush(stdout);
 	}
 	target_corrupt_flag = 0;
+	*((uint64_t*)nonceOut) = 0;
 
 	for(i = 0; i < cycles_per_iter; i++)
 	{
 		blockHeader[38] = i / 256;
 		blockHeader[39] = i % 256;
+
 		// Copy input data to the memory buffer
 		ret = cudaMemcpyAsync(blockHeadermobj, blockHeader, 80, cudaMemcpyHostToDevice, cudastream);
 		if(ret != cudaSuccess)
@@ -173,7 +173,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 
 		if(*((uint64_t*)nonceOut) != 0)
 		{
-			i = 8;
+			i = 4;
 			while(headerHash[i] <= ((uint8_t*)target)[i] && i<32)
 				i++;
 			if(i == 32)
@@ -185,6 +185,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 				blocks_mined++;
 				return -1;
 			}
+			*((uint64_t*)nonceOut) = 0;
 		}
 	}
 

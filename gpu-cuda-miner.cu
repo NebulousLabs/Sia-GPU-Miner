@@ -292,7 +292,7 @@ __global__ void __launch_bounds__(blocksize) nonceGrind(uint8_t *const __restric
 	blake2b_compress(h, in);
 
 	// Compare header to target
-	if(h[0] == 0)
+	if(((uint32_t*)h)[0] == 0)
 	{
 #pragma unroll
 		for(i = 0; i < 4; i++)
