@@ -14,11 +14,14 @@ char *bfw_url, *submit_url;
 int check_http_response(CURL *curl)
 {
 	long http_code = 0;
-	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if(http_code != 200)
+	CURLcode err = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	if(err == CURLE_OK)
 	{
-		fprintf(stderr, "HTTP error %lu\n", http_code);
-		return 1;
+		if(http_code != 200)
+		{
+			fprintf(stderr, "HTTP error %lu\n", http_code);
+			return 1;
+		}
 	}
 	return 0;
 }
