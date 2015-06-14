@@ -1,16 +1,3 @@
-#ifdef __linux__
-#define _GNU_SOURCE
-#define _POSIX_SOURCE
-#include <sys/time.h>
-#endif
-
-#ifdef _MSC_VER
-extern "C" {
-	int getopt(int, char * const *, const char *);
-	extern char *optarg;
-}
-#endif
-
 #include <cstdio>
 #include <cstddef>
 #include <cstdlib>

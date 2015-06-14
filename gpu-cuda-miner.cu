@@ -4,22 +4,12 @@
 #ifdef __INTELLISENSE__
 #define __launch_bounds__(blocksize)
 #endif
-// Implementations of clmemset and memcopy
 
 #if defined(_MSC_VER)
 #define ALIGN(x) __declspec(align(x))
 #else
 #define ALIGN(x) __attribute__((aligned(x)))
 #endif
-
-enum blake2b_constant
-{
-	BLAKE2B_BLOCKBYTES = 128,
-	BLAKE2B_OUTBYTES = 64,
-	BLAKE2B_KEYBYTES = 64,
-	BLAKE2B_SALTBYTES = 16,
-	BLAKE2B_PERSONALBYTES = 16
-};
 
 #if __CUDA_ARCH__ >= 320
 __device__ __forceinline__
@@ -64,7 +54,6 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(uint64_t *const __res
 	uint8_t headerHash8[32];
 	int i;
 
-	// Set nonce
 	const uint32_t id = (blockDim.x * blockIdx.x + threadIdx.x)*npt;
 	uint32_t nonce = 0;
 
