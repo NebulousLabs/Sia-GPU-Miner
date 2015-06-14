@@ -118,6 +118,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");
 		printf("Waiting for problem to be resolved...");
 		fflush(stdout);
+		return -1;
 	}
 	target_corrupt_flag = 0;
 	*((uint64_t*)nonceOut) = 0;

@@ -11,6 +11,18 @@ struct inData {
 
 char *bfw_url, *submit_url;
 
+int check_http_response(CURL *curl)
+{
+	long http_code = 0;
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+	if(http_code != 200)
+	{
+		fprintf(stderr, "HTTP error %lu\n", http_code);
+		return 1;
+	}
+	return 0;
+}
+
 void set_port(char *port) {
 	bfw_url = (char*)malloc(29 + strlen(port));
 	submit_url = (char*)malloc(28 + strlen(port));
@@ -60,7 +72,12 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		exit(1);
 	}
-	if (in.len != 112) {
+	if(check_http_response(curl))
+	{
+		return 1;
+	}
+	if(in.len != 112)
+	{
 		fprintf(stderr, "\ncurl did not receive correct bytes (got %d, expected 112)\n", in.len);
 		return 1;
 	}
@@ -68,7 +85,7 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
 	// Copy data to return
 	memcpy(target, in.bytes,     32);
 	memcpy(header, in.bytes+32,  80);
-
+	free(in.bytes);
 	return 0;
 }
 
@@ -90,7 +107,10 @@ void submit_header(CURL *curl, uint8_t *header) {
 			fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 			exit(1);
 		}
-	} else {
+		check_http_response(curl);
+	}
+	else
+	{
 		printf("Invalid curl object passed to submit_block()\n");
 		exit(1);
 	}
