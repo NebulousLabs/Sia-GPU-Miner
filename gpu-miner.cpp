@@ -52,6 +52,12 @@ static inline uint32_t swap32(uint32_t x)
 #endif
 }
 
+double target_to_diff(const uint32_t *const target)
+{
+	// we are lazy and only take the most significant 64 bits
+	return 4294967296.0 * 4294967295.0 / ((double)swap32(target[2]) + ((double)swap32(target[1]) * 4294967296.0));
+}
+
 // Perform global_item_size * iter_per_thread hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
@@ -98,7 +104,6 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		}
 		target_corrupt_flag = true;
 		printf("\nReceived corrupt target from Sia\n");
-		printf("%08x %08x %08x %08x %08x %08x %08x %08x \n", swap32(target[0]), swap32(target[1]), swap32(target[2]), swap32(target[3]), swap32(target[4]), swap32(target[5]), swap32(target[6]), swap32(target[7]));
 		printf("Usually this resolves itself within a minute or so\n");
 		printf("If it happens frequently trying increasing seconds per iteration\n");
 		printf("e.g. \"./gpu-miner -s 3 -c 200\"\n");

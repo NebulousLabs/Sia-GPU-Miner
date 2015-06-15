@@ -4,6 +4,8 @@
 using namespace std;
 #include "network.h"
 
+extern double target_to_diff(const uint32_t *const target);
+
 struct inData {
 	uint8_t *bytes;
 	size_t len;
@@ -54,7 +56,11 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	return size*nmemb;
 }
 
-int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
+int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header)
+{
+	static double diff = 0.0;
+	double tmp;
+
 	if (!curl) {
 		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
 		exit(1);
@@ -88,6 +94,13 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header) {
 	// Copy data to return
 	memcpy(target, in.bytes,     32);
 	memcpy(header, in.bytes+32,  80);
+	tmp = target_to_diff((uint32_t*)target);
+	if(tmp != diff)
+	{
+		printf("\nnew difficulty = %f\n", tmp);
+		diff = tmp;
+	}
+	
 	free(in.bytes);
 	return 0;
 }
