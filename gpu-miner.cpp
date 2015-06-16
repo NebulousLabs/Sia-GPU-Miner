@@ -18,7 +18,7 @@ using namespace std;
 #define MAX_SOURCE_SIZE (0x200000)
 
 uint64_t *blockHeadermobj = nullptr;
-char *headerHashmobj = nullptr;
+uint64_t *headerHashmobj = nullptr;
 uint64_t *nonceOutmobj = nullptr;
 cudaError_t ret;
 cudaStream_t cudastream;
@@ -66,7 +66,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	static bool init = false;
 	static uint8_t *headerHash = nullptr;
 	static uint32_t *target = nullptr;
-	static uint8_t *nonceOut = nullptr;
+	static uint64_t *nonceOut = nullptr;
 	static uint8_t *blockHeader = nullptr;
 
 	if(!init)
@@ -112,7 +112,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		return -1;
 	}
 	target_corrupt_flag = 0;
-	*((uint64_t*)nonceOut) = 0;
+	*nonceOut = 0;
 
 	for(i = 0; i < cycles_per_iter; i++)
 	{
@@ -136,7 +136,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 		}
 
-		extern void nonceGrindcuda(cudaStream_t, int, uint64_t *, char *, uint64_t *);
+		extern void nonceGrindcuda(cudaStream_t, uint32_t, uint64_t *, uint64_t *, uint64_t *);
 		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, nonceOutmobj);
 		ret = cudaGetLastError();
 		if(ret != cudaSuccess)
@@ -158,21 +158,20 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		}
 		cudaStreamSynchronize(cudastream);
 
-		if(*((uint64_t*)nonceOut) != 0)
+		if(*nonceOut != 0)
 		{
-			i = 4;
-			while(headerHash[i] <= ((uint8_t*)target)[i] && i<32)
-				i++;
-			if(i == 32)
+			int j = 4;
+			while(headerHash[j] == ((uint8_t*)target)[j] && j<32)
+				j++;
+			if(j==32 || headerHash[j] < ((uint8_t*)target)[j])
 			{
-
 				// Copy nonce to header.
-				((uint64_t*)blockHeader)[4] = *((uint64_t*)nonceOut);
+				((uint64_t*)blockHeader)[4] = *nonceOut;
 				submit_header(curl, blockHeader);
 				blocks_mined++;
 				return -1;
 			}
-			*((uint64_t*)nonceOut) = 0;
+			*nonceOut = 0;
 		}
 	}
 
