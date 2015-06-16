@@ -113,8 +113,10 @@ double grindNonces(int cycles_per_iter) {
 		if (nonceOut[0] != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
-			submit_header(blockHeader);
-			blocks_mined++;
+			if (!submit_header(blockHeader)) {
+				// Only count block if submit succeeded
+				blocks_mined++;
+			}
 			return -1;
 		}
 	}
