@@ -287,6 +287,10 @@ int main(int argc, char *argv[]) {
 	cycles_per_iter = DEFAULT_CPI;
 	for (i = 0; i < argc; i++) {
 		char c = argv[i][1]; // If argv is "-c" then arv[i][1] is 'c'
+		if (c == '-') {
+			// If they did --flag, make c the next char
+			c = argv[i][2];
+		}
 		switch (c) {
 		case 'h':
 			printf("\nUsage:\n\n");
@@ -303,33 +307,69 @@ int main(int argc, char *argv[]) {
 			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
 			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %ud.\n", DEFAULT_CPI);
 			printf("\n");
+			printPlatformsAndDevices();
 			exit(0);
 			break;
 		case 'I':
-			intensity = atoi(argv[++i]);
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -I 22)\n");
+				exit(1);
+			}
+			intensity = atoi(argv[i]);
+			if (intensity == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-I\'\n");
+				exit(1);
+			}
 			
 			if(intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-				printf("intensity either set to zero, or invalid. Default will be used.\n");
+				printf("intensity must be between %u and %u. %u is invalid\n", MIN_INTENSITY, MAX_INTENSITY, intensity);
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
 				intensity = DEFAULT_INTENSITY;
 			}
 			printf("Intensity set to %u\n", intensity);
 			break;
 		case 'p':
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -I 22)\n");
+				exit(1);
+			}
 			// Again, zero return on error. Default is zero.
 			// I don't see  a problem here.
-			platformid = atoi(argv[++i]);
+			platformid = atoi(argv[i]);
+			if (platformid == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-p\'\n");
+				exit(1);
+			}
 			break;
 		case 'd':
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -d 1)\n");
+				exit(1);
+			}
 			// See comment for previous option.
-			deviceidx = atoi(argv[++i]);
+			deviceidx = atoi(argv[i]);
+			if (deviceidx == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-d\'\n");
+				exit(1);
+			}
 			break;
 		case 'C':
-			cycles_per_iter = atoi(argv[++i]);
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -C 10)\n");
+				exit(1);
+			}
+			cycles_per_iter = atoi(argv[i]);
+			if (cycles_per_iter == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-C\'\n");
+				exit(1);
+			}
 			printf("Cycles per iteration set to %u\n", cycles_per_iter);
 			break;
 		case 'P':
-			i++;
+			if (++i >= argc) {
+				printf("Please pass in a port number following your flag (e.g. -P 9980)\n");
+				exit(1);
+			}
 			if (strlen(argv[i]) < 6) {
 				strcpy(port_number, argv[i]);
 			} else {
@@ -360,7 +400,6 @@ int main(int argc, char *argv[]) {
 	source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
 	fclose(fp);
 	
-	printPlatformsAndDevices();
 	selectOCLDevice(&platform_id, &device_id, platformid, deviceidx);
 	
 	// Make sure the device can handle our local item size
