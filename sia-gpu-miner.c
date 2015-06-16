@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-#include <unistd.h>
 
 #include "network.h"
  
@@ -279,15 +278,15 @@ int main(int argc, char *argv[]) {
 	cl_context context = NULL;
 	cl_program program = NULL;
 	cl_uint platformid = 0, deviceidx = 0;
-	int i, c;
+	int i;
 	unsigned cycles_per_iter;
-	char *port_number;
+	char port_number[6] = "9980";
 	double hash_rate;
 
 	// parse args
 	cycles_per_iter = DEFAULT_CPI;
-	port_number = "9980";
-	while ( (c = getopt(argc, argv, "hI:p:d:C:P:")) != -1) {
+	for (i = 0; i < argc; i++) {
+		char c = argv[i][1]; // If argv is "-c" then arv[i][1] is 'c'
 		switch (c) {
 		case 'h':
 			printf("\nUsage:\n\n");
@@ -307,29 +306,37 @@ int main(int argc, char *argv[]) {
 			exit(0);
 			break;
 		case 'I':
-			intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
+			intensity = atoi(argv[++i]);
 			
 			if(intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 				printf("intensity either set to zero, or invalid. Default will be used.\n");
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
 				intensity = DEFAULT_INTENSITY;
 			}
+			printf("Intensity set to %u\n", intensity);
 			break;
 		case 'p':
 			// Again, zero return on error. Default is zero.
 			// I don't see  a problem here.
-			platformid = strtoul(optarg, NULL, 10);
+			platformid = atoi(argv[++i]);
 			break;
 		case 'd':
 			// See comment for previous option.
-			deviceidx = strtoul(optarg, NULL, 10);
+			deviceidx = atoi(argv[++i]);
 			break;
 		case 'C':
-			sscanf(optarg, "%ud", &cycles_per_iter);
-			if(!cycles_per_iter) cycles_per_iter = DEFAULT_CPI;
+			cycles_per_iter = atoi(argv[++i]);
+			printf("Cycles per iteration set to %u\n", cycles_per_iter);
 			break;
 		case 'P':
-			port_number = strdup(optarg);
+			i++;
+			if (strlen(argv[i]) < 6) {
+				strcpy(port_number, argv[i]);
+			} else {
+				printf("Invalid port passed in as flag\n");
+				exit(1);
+			}
+			printf("Port set to %s\n", port_number);
 			break;
 		}
 	}
