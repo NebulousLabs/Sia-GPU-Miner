@@ -210,6 +210,68 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	*OCLPlatform = platformids[platformid];
 	*OCLDevice = deviceids[deviceidx];
 }
+
+void printPlatformsAndDevices() {
+	cl_uint platformCount, deviceCount;
+	cl_platform_id *platformids;
+	cl_device_id *deviceids;
+	cl_int ret;
+
+	ret = clGetPlatformIDs(0, NULL, &platformCount);
+	if (ret != CL_SUCCESS || !platformCount) {
+		return;
+	}
+	printf("Found %u platform(s) on your computer.\n", platformCount);
+
+	platformids = (cl_platform_id *)malloc(sizeof(cl_platform_id) * platformCount);
+
+	ret = clGetPlatformIDs(platformCount, platformids, NULL);
+	if (ret != CL_SUCCESS) {
+		free(platformids);
+		return;
+	}
+
+	int i,j; // Iterate through each platform and print its devices
+	for (i = 0; i < platformCount; i++) {
+		char str[80];
+		// Print platform info
+		ret = clGetPlatformInfo(platformids[i], CL_PLATFORM_NAME, 80, str, NULL);
+		if (ret != CL_SUCCESS) {
+			free(platformids);
+			return;
+		}
+		printf("Devices on platform %d, \"%s\":\n", i, str);
+		ret = clGetDeviceIDs(platformids[i], CL_DEVICE_TYPE_GPU, 0, NULL, &deviceCount);
+		if (ret != CL_SUCCESS) {
+			free(platformids);
+			return;
+		}
+		if (!deviceCount) {
+			continue;
+		}
+		deviceids = (cl_device_id *)malloc(sizeof(cl_device_id) * deviceCount);
+
+		ret = clGetDeviceIDs(platformids[i], CL_DEVICE_TYPE_GPU, deviceCount, deviceids, NULL);
+		if (ret != CL_SUCCESS) {
+			free(platformids);
+			free(deviceids);
+			return;
+		}
+
+		for (j = 0; j < deviceCount; j++) {
+			// Print platform info
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_NAME, 80, str, NULL);
+			if (ret != CL_SUCCESS) {
+				free(platformids);
+				free(deviceids);
+				return;
+			}
+			printf("\tDevice %d: %s\n", j, str);
+		}
+		free(deviceids);
+	}
+	free(platformids);
+}
 	
 int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
@@ -291,6 +353,7 @@ int main(int argc, char *argv[]) {
 	source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
 	fclose(fp);
 	
+	printPlatformsAndDevices();
 	selectOCLDevice(&platform_id, &device_id, platformid, deviceidx);
 	
 	// Make sure the device can handle our local item size
