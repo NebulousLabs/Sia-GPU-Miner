@@ -56,7 +56,7 @@ static inline uint32_t swap32(uint32_t x)
 double target_to_diff(const uint32_t *const target)
 {
 	// we are lazy and only take the most significant 64 bits
-	return 4294967296.0 * 4294967295.0 / ((double)swap32(target[2]) + ((double)swap32(target[1]) * 4294967296.0));
+	return (4294967296.0 * 0xffff0000) / ((double)swap32(target[2]) + ((double)swap32(target[1]) * 4294967296.0));
 }
 
 // Perform global_item_size * iter_per_thread hashes
