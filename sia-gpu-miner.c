@@ -285,7 +285,7 @@ int main(int argc, char *argv[]) {
 
 	// parse args
 	cycles_per_iter = DEFAULT_CPI;
-	for (i = 0; i < argc; i++) {
+	for (i = 1; i < argc; i++) {
 		char c = argv[i][1]; // If argv is "-c" then arv[i][1] is 'c'
 		if (c == '-') {
 			// If they did --flag, make c the next char
@@ -330,7 +330,7 @@ int main(int argc, char *argv[]) {
 			break;
 		case 'p':
 			if (++i >= argc) {
-				printf("Please pass in a number following your flag (e.g. -I 22)\n");
+				printf("Please pass in a number following your flag (e.g. -p 1)\n");
 				exit(1);
 			}
 			// Again, zero return on error. Default is zero.
@@ -377,6 +377,10 @@ int main(int argc, char *argv[]) {
 				exit(1);
 			}
 			printf("Port set to %s\n", port_number);
+			break;
+		default:
+			printf("Please use a valid flag. Use \"--help\" for options\n");
+			exit(1);
 			break;
 		}
 	}
