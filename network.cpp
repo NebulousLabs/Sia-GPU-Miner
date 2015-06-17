@@ -46,14 +46,14 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
 	size_t new_len = size*nmemb;
 	if(in == NULL || new_len == 0)
 		return 0;
-	in->bytes = (uint8_t*)malloc(new_len);
+	in->bytes = (uint8_t*)realloc(in->bytes, in->len + new_len);
 	if(in->bytes == NULL)
 	{
 		fprintf(stderr, "malloc() failed\n");
 		exit(EXIT_FAILURE);
 	}
-	memcpy(in->bytes, ptr, size*nmemb);
-	in->len = new_len;
+	memcpy(in->bytes + in->len, ptr, size*nmemb);
+	in->len += new_len;
 
 	return size*nmemb;
 }
@@ -77,10 +77,13 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header)
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
 
+	in.len = 0;
+	in.bytes = NULL;
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK) {
 		fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
+		curl_easy_cleanup(curl);
 		exit(1);
 	}
 	if(check_http_response(curl))
@@ -107,9 +110,14 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header)
 	return 0;
 }
 
-void submit_header(CURL *curl, uint8_t *header) {
-	if (curl) {
+void submit_header(CURL *curl, uint8_t *header)
+{
+	if(curl)
+	{
 		CURLcode res;
+		struct inData in;
+		in.len = 0;
+		in.bytes = NULL;
 
 		curl_easy_reset(curl);
 		curl_easy_setopt(curl, CURLOPT_URL, submit_url);
@@ -118,14 +126,18 @@ void submit_header(CURL *curl, uint8_t *header) {
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
 		// Prevent printing to stdout
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
 
 		res = curl_easy_perform(curl);
-		if (res != CURLE_OK) {
+		if(res != CURLE_OK)
+		{
 			fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+			free(in.bytes);
+			curl_easy_cleanup(curl);
 			exit(1);
 		}
 		check_http_response(curl);
+		free(in.bytes);
 	}
 	else
 	{
@@ -133,3 +145,4 @@ void submit_header(CURL *curl, uint8_t *header) {
 		exit(1);
 	}
 }
+
