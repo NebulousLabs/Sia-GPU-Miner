@@ -24,6 +24,7 @@ cudaError_t ret;
 cudaStream_t cudastream;
 
 CURL *curl = nullptr;
+char curlerrorbuffer[CURL_ERROR_SIZE];
 
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
@@ -235,9 +236,16 @@ int main(int argc, char *argv[])
 	// Set siad URL
 	set_port(port_number);
 
+	printf("\nInitializing...\n");
+
 	// Use curl to communicate with siad
 	curl = curl_easy_init();
-	printf("\nInitializing...\n");
+	if(curl == NULL)
+	{
+		printf("\nError: can't init curl\n");
+		exit(EXIT_FAILURE);
+	}
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerrorbuffer);
 
 	int deviceCount;
 	ret = cudaGetDeviceCount(&deviceCount);

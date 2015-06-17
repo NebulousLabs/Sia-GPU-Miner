@@ -41,12 +41,14 @@ void set_port(char *port) {
 }
 
 // Write network data to an array of bytes
-size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
+size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
+{
 	size_t new_len = size*nmemb;
 	if(in == NULL || new_len == 0)
-		return new_len;
+		return 0;
 	in->bytes = (uint8_t*)malloc(new_len);
-	if (in->bytes == NULL) {
+	if(in->bytes == NULL)
+	{
 		fprintf(stderr, "malloc() failed\n");
 		exit(EXIT_FAILURE);
 	}
