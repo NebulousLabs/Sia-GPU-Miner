@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
-#include <unistd.h>
 
 #include "network.h"
  
@@ -113,8 +112,10 @@ double grindNonces(int cycles_per_iter) {
 		if (nonceOut[0] != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
-			submit_header(blockHeader);
-			blocks_mined++;
+			if (!submit_header(blockHeader)) {
+				// Only count block if submit succeeded
+				blocks_mined++;
+			}
 			return -1;
 		}
 	}
@@ -208,6 +209,68 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	*OCLPlatform = platformids[platformid];
 	*OCLDevice = deviceids[deviceidx];
 }
+
+void printPlatformsAndDevices() {
+	cl_uint platformCount, deviceCount;
+	cl_platform_id *platformids;
+	cl_device_id *deviceids;
+	cl_int ret;
+
+	ret = clGetPlatformIDs(0, NULL, &platformCount);
+	if (ret != CL_SUCCESS || !platformCount) {
+		return;
+	}
+	printf("Found %u platform(s) on your computer.\n", platformCount);
+
+	platformids = (cl_platform_id *)malloc(sizeof(cl_platform_id) * platformCount);
+
+	ret = clGetPlatformIDs(platformCount, platformids, NULL);
+	if (ret != CL_SUCCESS) {
+		free(platformids);
+		return;
+	}
+
+	int i,j; // Iterate through each platform and print its devices
+	for (i = 0; i < platformCount; i++) {
+		char str[80];
+		// Print platform info
+		ret = clGetPlatformInfo(platformids[i], CL_PLATFORM_NAME, 80, str, NULL);
+		if (ret != CL_SUCCESS) {
+			free(platformids);
+			return;
+		}
+		printf("Devices on platform %d, \"%s\":\n", i, str);
+		ret = clGetDeviceIDs(platformids[i], CL_DEVICE_TYPE_GPU, 0, NULL, &deviceCount);
+		if (ret != CL_SUCCESS) {
+			free(platformids);
+			return;
+		}
+		if (!deviceCount) {
+			continue;
+		}
+		deviceids = (cl_device_id *)malloc(sizeof(cl_device_id) * deviceCount);
+
+		ret = clGetDeviceIDs(platformids[i], CL_DEVICE_TYPE_GPU, deviceCount, deviceids, NULL);
+		if (ret != CL_SUCCESS) {
+			free(platformids);
+			free(deviceids);
+			return;
+		}
+
+		for (j = 0; j < deviceCount; j++) {
+			// Print platform info
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_NAME, 80, str, NULL);
+			if (ret != CL_SUCCESS) {
+				free(platformids);
+				free(deviceids);
+				return;
+			}
+			printf("\tDevice %d: %s\n", j, str);
+		}
+		free(deviceids);
+	}
+	free(platformids);
+}
 	
 int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
@@ -215,15 +278,19 @@ int main(int argc, char *argv[]) {
 	cl_context context = NULL;
 	cl_program program = NULL;
 	cl_uint platformid = 0, deviceidx = 0;
-	int i, c;
+	int i;
 	unsigned cycles_per_iter;
-	char *port_number;
+	char port_number[6] = "9980";
 	double hash_rate;
 
 	// parse args
 	cycles_per_iter = DEFAULT_CPI;
-	port_number = "9980";
-	while ( (c = getopt(argc, argv, "hI:p:d:C:P:")) != -1) {
+	for (i = 1; i < argc; i++) {
+		char c = argv[i][1]; // If argv is "-c" then arv[i][1] is 'c'
+		if (c == '-') {
+			// If they did --flag, make c the next char
+			c = argv[i][2];
+		}
 		switch (c) {
 		case 'h':
 			printf("\nUsage:\n\n");
@@ -240,32 +307,80 @@ int main(int argc, char *argv[]) {
 			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
 			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %ud.\n", DEFAULT_CPI);
 			printf("\n");
+			printPlatformsAndDevices();
 			exit(0);
 			break;
 		case 'I':
-			intensity = strtoul(optarg, NULL, 10);		// Returns zero on error
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -I 22)\n");
+				exit(1);
+			}
+			intensity = atoi(argv[i]);
+			if (intensity == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-I\'\n");
+				exit(1);
+			}
 			
 			if(intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-				printf("intensity either set to zero, or invalid. Default will be used.\n");
+				printf("intensity must be between %u and %u. %u is invalid\n", MIN_INTENSITY, MAX_INTENSITY, intensity);
 				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
 				intensity = DEFAULT_INTENSITY;
 			}
+			printf("Intensity set to %u\n", intensity);
 			break;
 		case 'p':
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -p 1)\n");
+				exit(1);
+			}
 			// Again, zero return on error. Default is zero.
 			// I don't see  a problem here.
-			platformid = strtoul(optarg, NULL, 10);
+			platformid = atoi(argv[i]);
+			if (platformid == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-p\'\n");
+				exit(1);
+			}
 			break;
 		case 'd':
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -d 1)\n");
+				exit(1);
+			}
 			// See comment for previous option.
-			deviceidx = strtoul(optarg, NULL, 10);
+			deviceidx = atoi(argv[i]);
+			if (deviceidx == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-d\'\n");
+				exit(1);
+			}
 			break;
 		case 'C':
-			sscanf(optarg, "%ud", &cycles_per_iter);
-			if(!cycles_per_iter) cycles_per_iter = DEFAULT_CPI;
+			if (++i >= argc) {
+				printf("Please pass in a number following your flag (e.g. -C 10)\n");
+				exit(1);
+			}
+			cycles_per_iter = atoi(argv[i]);
+			if (cycles_per_iter == 0 && argv[i][0] != '0') {
+				printf("Invalid number passed to \'-C\'\n");
+				exit(1);
+			}
+			printf("Cycles per iteration set to %u\n", cycles_per_iter);
 			break;
 		case 'P':
-			port_number = strdup(optarg);
+			if (++i >= argc) {
+				printf("Please pass in a port number following your flag (e.g. -P 9980)\n");
+				exit(1);
+			}
+			if (strlen(argv[i]) < 6) {
+				strcpy(port_number, argv[i]);
+			} else {
+				printf("Invalid port passed in as flag\n");
+				exit(1);
+			}
+			printf("Port set to %s\n", port_number);
+			break;
+		default:
+			printf("Please use a valid flag. Use \"--help\" for options\n");
+			exit(1);
 			break;
 		}
 	}

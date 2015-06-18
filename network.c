@@ -91,7 +91,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	return 0;
 }
 
-void submit_header(uint8_t *header) {
+int submit_header(uint8_t *header) {
 	CURLcode res;
 
 	curl_easy_reset(curl);
@@ -108,7 +108,7 @@ void submit_header(uint8_t *header) {
 		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		exit(1);
 	}
-	check_http_response(curl);
+	return check_http_response(curl);
 }
 
 void free_network() {
