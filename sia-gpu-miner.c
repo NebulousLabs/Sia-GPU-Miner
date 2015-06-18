@@ -1,3 +1,4 @@
+// TODO: document this
 #ifdef __linux__
 #define _GNU_SOURCE
 #define _POSIX_SOURCE
@@ -13,12 +14,16 @@
 
 #include "network.h"
  
+// TODO: document this
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/cl.h>
 #endif
 
+// TODO: explain what these are, not just why they have the values they were
+// given.
+//
 // Minimum intensity being less than 8 may break things
 #define MIN_INTENSITY		8
 #define MAX_INTENSITY		32
@@ -27,8 +32,10 @@
 // TODO: Might wanna establish a min/max for this, too...
 #define DEFAULT_CPI			3
 
+// TODO: Document this
 #define MAX_SOURCE_SIZE 	(0x200000)
 
+// TODO: Document these
 cl_command_queue command_queue = NULL;
 cl_mem blockHeadermobj = NULL;
 cl_mem headerHashmobj = NULL;
@@ -37,21 +44,32 @@ cl_mem nonceOutmobj = NULL;
 cl_kernel kernel = NULL;
 cl_int ret;
 
+// TODO: Document these
 size_t local_item_size = 256;
-unsigned int blocks_mined = 0, intensity = DEFAULT_INTENSITY;
+unsigned int blocks_mined = 0;
+unsigned int intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
 int target_corrupt_flag = 0;
 
+// TODO: explain what this is
 void quitSignal(int __unused) {
 	quit = 1;
-	printf("\nCaught deadly signal, quitting...\n");
+	printf("\nCaught kill signal, quitting...\n");
+	// TODO: ??? It just prints a statement? Shouldn't it do
+	// something more, like call exit() or cleanup()?
 }
 
+// TODO: This doesn't really count as a docstring. Need to explain what the
+// function does at a high level, not a low level. Low level is for reading the
+// code.
+//
 // Perform (2^intensity) * cycles_per_iter hashes
 // Return -1 if a block is found
 // Else return the hashrate in MH/s
 double grindNonces(int cycles_per_iter) {
 	// Start timing this iteration
+	// 
+	// TODO: Explain the difference between the linux and non-linux stuff.
 	#ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);
@@ -97,18 +115,25 @@ double grindNonces(int cycles_per_iter) {
 
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
+		if (ret != CL_SUCCESS) {
+			printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1);
+		}
 		ret = clEnqueueWriteBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+		if (ret != CL_SUCCESS) {
+			printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
+		}
 
+		// Run the kernel
 		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, &globalid_offset, &global_item_size, &local_item_size, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
+		if (ret != CL_SUCCESS) {
+			printf("failed to start kernel: %d\n", ret); exit(1);
+		}
 
-		// Copy result to host
+		// Copy result to host and see if a block was found.
 		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
-
-		// Did we find one?
+		if (ret != CL_SUCCESS) {
+			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
+		}
 		if (nonceOut[0] != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
@@ -121,6 +146,9 @@ double grindNonces(int cycles_per_iter) {
 	}
 
 	// Hashrate is inaccurate if a block was found
+	// 
+	// TODO: this comment isn't terribly helpful. Also you need to document the
+	// ifdef __linux__ stuff again.
 	#ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
 	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
@@ -305,7 +333,7 @@ int main(int argc, char *argv[]) {
 			printf("\t\tOpenCL platforms will likely have different devices available. Default is 0.\n");
 			printf("\n");
 			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
-			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %ud.\n", DEFAULT_CPI);
+			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %u.\n", DEFAULT_CPI);
 			printf("\n");
 			printPlatformsAndDevices();
 			exit(0);
@@ -511,8 +539,6 @@ int main(int argc, char *argv[]) {
 	ret = clReleaseContext(context);	
 
 	free_network();
-
 	free(source_str);
-
 	return 0;
 }
