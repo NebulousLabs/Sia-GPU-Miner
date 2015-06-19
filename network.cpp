@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 using namespace std;
 #include "network.h"
 
@@ -102,7 +103,7 @@ int get_header_for_work(CURL *curl, uint8_t *target, uint8_t *header)
 	tmp = target_to_diff((uint32_t*)target);
 	if(tmp != diff)
 	{
-		printf("\nnew difficulty = %f\n", tmp);
+		printf("\nnew difficulty = %lu\n", lround(tmp));
 		diff = tmp;
 	}
 	
