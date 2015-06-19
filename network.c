@@ -5,14 +5,17 @@
 
 #include "network.h"
 
+// TODO: document what this does. It should also probably be renamed.
 struct inData {
 	uint8_t *bytes;
 	size_t len;
 };
 
+// TODO: Is it safe to have these as global variables?
 char *bfw_url, *submit_url;
 CURL *curl;
 
+// check_http_response
 int check_http_response(CURL *curl) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -23,6 +26,7 @@ int check_http_response(CURL *curl) {
 	return 0;
 }
 
+// set_port establishes the port that siad is on.
 void set_port(char *port) {
 	bfw_url = malloc(29 + strlen(port));
 	submit_url = malloc(28 + strlen(port));
@@ -31,6 +35,8 @@ void set_port(char *port) {
 }
 
 // Write network data to an array of bytes
+//
+// TODO: nmemb is not a good name. 'in' is also probably not a good name.
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	if (in == NULL)
 		return size*nmemb;
@@ -46,6 +52,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
 	return size*nmemb;
 }
 
+// init_network initializes curl networking.
 void init_network() {
 	curl =  curl_easy_init();
 	if (!curl) {
@@ -53,6 +60,8 @@ void init_network() {
 	}
 }
 
+// get_header_for_work fetches a block header from siad. This block header is
+// ready for nonce grinding.
 int get_header_for_work(uint8_t *target, uint8_t *header) {
 	if (!curl) {
 		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
@@ -91,6 +100,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	return 0;
 }
 
+// submit_header submits a block header to siad.
 int submit_header(uint8_t *header) {
 	CURLcode res;
 
@@ -111,6 +121,7 @@ int submit_header(uint8_t *header) {
 	return check_http_response(curl);
 }
 
+// free_network closes the network connection.
 void free_network() {
 	curl_easy_cleanup(curl);
 }

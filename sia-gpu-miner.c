@@ -166,6 +166,8 @@ double grindNonces(int cycles_per_iter) {
 	return hash_rate;
 }
 
+// selectOCLDevice manages opencl device selection as requested by the command
+// line arguments.
 void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint platformid, cl_uint deviceidx) {
 	cl_uint platformCount, deviceCount;
 	cl_platform_id *platformids;
@@ -243,6 +245,8 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	*OCLDevice = deviceids[deviceidx];
 }
 
+// printPlatformsAndDevices prints out a list of opencl platforms and devices
+// that were found on the system.
 void printPlatformsAndDevices() {
 	cl_uint platformCount, deviceCount;
 	cl_platform_id *platformids;
@@ -304,7 +308,9 @@ void printPlatformsAndDevices() {
 	}
 	free(platformids);
 }
-	
+
+// main reads the command line arguments and then starts the miner. The program
+// will exit if there are any errors.
 int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
@@ -327,9 +333,14 @@ int main(int argc, char *argv[]) {
 		switch (c) {
 		case 'h':
 			printf("\nUsage:\n\n");
+			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
+			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %u.\n", DEFAULT_CPI);
+			printf("\n");
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
 			printf("\t\tInterpretation is 2^intensity; the default is 16. Lower if GPU crashes or\n");
 			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
+			printf("\n");
+			printf("\t P - port: which port to use when talking to the siad api.\n");
 			printf("\n");
 			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
 			printf("\t\tyet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.\n");
@@ -337,10 +348,8 @@ int main(int argc, char *argv[]) {
 			printf("\t d - OpenCL device ID: Self-explanatory; it's the GPU index. Note that different\n");
 			printf("\t\tOpenCL platforms will likely have different devices available. Default is 0.\n");
 			printf("\n");
-			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
-			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %u.\n", DEFAULT_CPI);
-			printf("\n");
 			printPlatformsAndDevices();
+			printf("\n");
 			exit(0);
 			break;
 		case 'I':
