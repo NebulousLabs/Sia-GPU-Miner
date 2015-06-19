@@ -1,4 +1,10 @@
-// TODO: document this
+/*
+ * A cross-platform GPU miner built for Sia
+ * using OpenCL for interacting with the graphics card
+ * and libcurl for interacting with the Sia daemon.
+ */
+
+// If using Linux, use a more accurate and reliable timer
 #ifdef __linux__
 #define _GNU_SOURCE
 #define _POSIX_SOURCE
@@ -14,62 +20,63 @@
 
 #include "network.h"
  
-// TODO: document this
+// OpenCL header is named differently on Apple devices for some reason
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/cl.h>
 #endif
 
-// TODO: explain what these are, not just why they have the values they were
-// given.
-//
-// Minimum intensity being less than 8 may break things
+// 2^intensity hashes are calculated each time the kernel is called
+// Minimum of 2^8 (256) because our default local_item_size is 256
+// global_item_size (2^intensity) must be a multiple of local_item_size
+// Max of 2^32 so that people can't send an hour of work to the GPU at one time
 #define MIN_INTENSITY		8
 #define MAX_INTENSITY		32
 #define DEFAULT_INTENSITY	16
 
-// TODO: Might wanna establish a min/max for this, too...
-#define DEFAULT_CPI			3
+// Number of times the GPU kernel is called between updating the command line text
+#define MIN_CPI 		1     // Must do one call per update
+#define MAX_CPI 		65536 // 2^16 is a slightly arbitrary max
+#define DEFAULT_CPI		3
 
-// TODO: Document this
+// The maximum size of the .cl file we read in and compile
 #define MAX_SOURCE_SIZE 	(0x200000)
 
-// TODO: Document these
+// Objects needed to call the kernel
+// global namespace so our grindNonce function can access them
 cl_command_queue command_queue = NULL;
-cl_mem blockHeadermobj = NULL;
-cl_mem headerHashmobj = NULL;
-cl_mem targmobj = NULL;
-cl_mem nonceOutmobj = NULL;
 cl_kernel kernel = NULL;
 cl_int ret;
 
-// TODO: Document these
-size_t local_item_size = 256;
+// mem objects for storing our kernel parameters
+cl_mem blockHeadermobj = NULL;
+cl_mem nonceOutmobj = NULL;
+
+// More gobal variables the grindNonce needs to access
+size_t local_item_size = 256; // Size of local work groups. 256 is usually optimal
 unsigned int blocks_mined = 0;
 unsigned int intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
+
+// If we get a corrupt target, we want to remember so that if subsequent curl calls
+// reutrn more corrupt targets, we don't spam the cmd line with errors
 int target_corrupt_flag = 0;
 
-// TODO: explain what this is
+// Set quit variable when SIGINT is received so we can do proper cleanup
 void quitSignal(int __unused) {
 	quit = 1;
 	printf("\nCaught kill signal, quitting...\n");
-	// TODO: ??? It just prints a statement? Shouldn't it do
-	// something more, like call exit() or cleanup()?
 }
 
-// TODO: This doesn't really count as a docstring. Need to explain what the
-// function does at a high level, not a low level. Low level is for reading the
-// code.
-//
-// Perform (2^intensity) * cycles_per_iter hashes
-// Return -1 if a block is found
-// Else return the hashrate in MH/s
+// Given a number of cycles per iter, grind nonces will poll Sia for a block
+// then do 2^intensity hashes cycles_per_iter times, checking for a successful
+// hash each time
+// Returns -1 if it finds a block, otherwise it returns the hash_rate of the GPU
 double grindNonces(int cycles_per_iter) {
+
 	// Start timing this iteration
-	// 
-	// TODO: Explain the difference between the linux and non-linux stuff.
+	// If on Linux, use the more reliable/accurate timer, otherwise use default timer
 	#ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);
@@ -145,10 +152,8 @@ double grindNonces(int cycles_per_iter) {
 		}
 	}
 
-	// Hashrate is inaccurate if a block was found
-	// 
-	// TODO: this comment isn't terribly helpful. Also you need to document the
-	// ifdef __linux__ stuff again.
+	// If on Linux, use the more reliable/accurate timer, otherwise use default timer
+	// to calculate the hash rate of thie iteration
 	#ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
 	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
@@ -343,16 +348,17 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -I 22)\n");
 				exit(1);
 			}
+			// atoi returns 0 on error
 			intensity = atoi(argv[i]);
-			if (intensity == 0 && argv[i][0] != '0') {
+			if (intensity == 0 && argv[i][0] != '0') { // Check if atoi returned 0 because of an error
 				printf("Invalid number passed to \'-I\'\n");
 				exit(1);
 			}
 			
 			if(intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 				printf("intensity must be between %u and %u. %u is invalid\n", MIN_INTENSITY, MAX_INTENSITY, intensity);
-				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
-				intensity = DEFAULT_INTENSITY;
+				printf("Note that the default intensity is %d\n", DEFAULT_INTENSITY);
+				exit(1);
 			}
 			printf("Intensity set to %u\n", intensity);
 			break;
@@ -361,8 +367,6 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -p 1)\n");
 				exit(1);
 			}
-			// Again, zero return on error. Default is zero.
-			// I don't see  a problem here.
 			platformid = atoi(argv[i]);
 			if (platformid == 0 && argv[i][0] != '0') {
 				printf("Invalid number passed to \'-p\'\n");
@@ -374,7 +378,6 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -d 1)\n");
 				exit(1);
 			}
-			// See comment for previous option.
 			deviceidx = atoi(argv[i]);
 			if (deviceidx == 0 && argv[i][0] != '0') {
 				printf("Invalid number passed to \'-d\'\n");
@@ -389,6 +392,12 @@ int main(int argc, char *argv[]) {
 			cycles_per_iter = atoi(argv[i]);
 			if (cycles_per_iter == 0 && argv[i][0] != '0') {
 				printf("Invalid number passed to \'-C\'\n");
+				exit(1);
+			}
+
+			if(cycles_per_iter < MIN_CPI || cycles_per_iter > MAX_CPI) {
+				printf("cycles per iter must be between %u and %u. %u is invalid\n", MIN_CPI, MAX_CPI, cycles_per_iter);
+				printf("Note that the default cycles per iter is %d\n", DEFAULT_CPI);
 				exit(1);
 			}
 			printf("Cycles per iteration set to %u\n", cycles_per_iter);
@@ -453,10 +462,6 @@ int main(int argc, char *argv[]) {
 	// Create Buffer Objects
 	blockHeadermobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 80 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create blockHeadermobj buffer: %d\n", ret); exit(1); }
-	headerHashmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 32 * sizeof(uint8_t), NULL, &ret);
-	if (ret != CL_SUCCESS) { printf("failed to create headerHashmobj buffer: %d\n", ret); exit(1); }
-	targmobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 32 * sizeof(uint8_t), NULL, &ret);
-	if (ret != CL_SUCCESS) { printf("failed to create targmobj buffer: %d\n", ret); exit(1); }
 	nonceOutmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 8 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1); }
 
@@ -518,7 +523,7 @@ int main(int argc, char *argv[]) {
 		// Repeat until no block is found
 		do {
 			hash_rate = grindNonces(cycles_per_iter);
-		} while (hash_rate == -1);
+		} while (hash_rate == -1 && !quit);
 
 		if (!quit) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
@@ -532,8 +537,6 @@ int main(int argc, char *argv[]) {
 	ret = clReleaseKernel(kernel);
 	ret = clReleaseProgram(program);
 	ret = clReleaseMemObject(blockHeadermobj);
-	ret = clReleaseMemObject(headerHashmobj);
-	ret = clReleaseMemObject(targmobj);
 	ret = clReleaseMemObject(nonceOutmobj);
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);	
