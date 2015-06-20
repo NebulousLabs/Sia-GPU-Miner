@@ -1,3 +1,10 @@
+/*
+ * A cross-platform GPU miner built for Sia
+ * using OpenCL for interacting with the graphics card
+ * and libcurl for interacting with the Sia daemon.
+ */
+
+// If using Linux, use a more accurate and reliable timer
 #ifdef __linux__
 #define _GNU_SOURCE
 #define _POSIX_SOURCE
@@ -13,45 +20,63 @@
 
 #include "network.h"
  
+// OpenCL header is named differently on Apple devices for some reason
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/cl.h>
 #endif
 
-// Minimum intensity being less than 8 may break things
+// 2^intensity hashes are calculated each time the kernel is called
+// Minimum of 2^8 (256) because our default local_item_size is 256
+// global_item_size (2^intensity) must be a multiple of local_item_size
+// Max of 2^32 so that people can't send an hour of work to the GPU at one time
 #define MIN_INTENSITY		8
 #define MAX_INTENSITY		32
 #define DEFAULT_INTENSITY	16
 
-// TODO: Might wanna establish a min/max for this, too...
-#define DEFAULT_CPI			3
+// Number of times the GPU kernel is called between updating the command line text
+#define MIN_CPI 		1     // Must do one call per update
+#define MAX_CPI 		65536 // 2^16 is a slightly arbitrary max
+#define DEFAULT_CPI		3
 
+// The maximum size of the .cl file we read in and compile
 #define MAX_SOURCE_SIZE 	(0x200000)
 
+// Objects needed to call the kernel
+// global namespace so our grindNonce function can access them
 cl_command_queue command_queue = NULL;
-cl_mem blockHeadermobj = NULL;
-cl_mem headerHashmobj = NULL;
-cl_mem targmobj = NULL;
-cl_mem nonceOutmobj = NULL;
 cl_kernel kernel = NULL;
 cl_int ret;
 
-size_t local_item_size = 256;
-unsigned int blocks_mined = 0, intensity = DEFAULT_INTENSITY;
+// mem objects for storing our kernel parameters
+cl_mem blockHeadermobj = NULL;
+cl_mem nonceOutmobj = NULL;
+
+// More gobal variables the grindNonce needs to access
+size_t local_item_size = 256; // Size of local work groups. 256 is usually optimal
+unsigned int blocks_mined = 0;
+unsigned int intensity = DEFAULT_INTENSITY;
 static volatile int quit = 0;
+
+// If we get a corrupt target, we want to remember so that if subsequent curl calls
+// reutrn more corrupt targets, we don't spam the cmd line with errors
 int target_corrupt_flag = 0;
 
+// Set quit variable when SIGINT is received so we can do proper cleanup
 void quitSignal(int __unused) {
 	quit = 1;
-	printf("\nCaught deadly signal, quitting...\n");
+	printf("\nCaught kill signal, quitting...\n");
 }
 
-// Perform (2^intensity) * cycles_per_iter hashes
-// Return -1 if a block is found
-// Else return the hashrate in MH/s
+// Given a number of cycles per iter, grind nonces will poll Sia for a block
+// then do 2^intensity hashes cycles_per_iter times, checking for a successful
+// hash each time
+// Returns -1 if it finds a block, otherwise it returns the hash_rate of the GPU
 double grindNonces(int cycles_per_iter) {
+
 	// Start timing this iteration
+	// If on Linux, use the more reliable/accurate timer, otherwise use default timer
 	#ifdef __linux__
 	struct timespec begin, end;
 	clock_gettime(CLOCK_REALTIME, &begin);
@@ -97,18 +122,25 @@ double grindNonces(int cycles_per_iter) {
 
 		// Copy input data to the memory buffer
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1); }
+		if (ret != CL_SUCCESS) {
+			printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1);
+		}
 		ret = clEnqueueWriteBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to write to targmobj buffer: %d\n", ret); exit(1); }
+		if (ret != CL_SUCCESS) {
+			printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
+		}
 
+		// Run the kernel
 		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, &globalid_offset, &global_item_size, &local_item_size, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to start kernel: %d\n", ret); exit(1); }
+		if (ret != CL_SUCCESS) {
+			printf("failed to start kernel: %d\n", ret); exit(1);
+		}
 
-		// Copy result to host
+		// Copy result to host and see if a block was found.
 		ret = clEnqueueReadBuffer(command_queue, nonceOutmobj, CL_TRUE, 0, 8 * sizeof(uint8_t), nonceOut, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) { printf("failed to read nonce from buffer: %d\n", ret); exit(1); }
-
-		// Did we find one?
+		if (ret != CL_SUCCESS) {
+			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
+		}
 		if (nonceOut[0] != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
@@ -120,7 +152,8 @@ double grindNonces(int cycles_per_iter) {
 		}
 	}
 
-	// Hashrate is inaccurate if a block was found
+	// If on Linux, use the more reliable/accurate timer, otherwise use default timer
+	// to calculate the hash rate of thie iteration
 	#ifdef __linux__
 	clock_gettime(CLOCK_REALTIME, &end);
 	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
@@ -133,6 +166,8 @@ double grindNonces(int cycles_per_iter) {
 	return hash_rate;
 }
 
+// selectOCLDevice manages opencl device selection as requested by the command
+// line arguments.
 void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_uint platformid, cl_uint deviceidx) {
 	cl_uint platformCount, deviceCount;
 	cl_platform_id *platformids;
@@ -210,6 +245,8 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	*OCLDevice = deviceids[deviceidx];
 }
 
+// printPlatformsAndDevices prints out a list of opencl platforms and devices
+// that were found on the system.
 void printPlatformsAndDevices() {
 	cl_uint platformCount, deviceCount;
 	cl_platform_id *platformids;
@@ -271,7 +308,9 @@ void printPlatformsAndDevices() {
 	}
 	free(platformids);
 }
-	
+
+// main reads the command line arguments and then starts the miner. The program
+// will exit if there are any errors.
 int main(int argc, char *argv[]) {
 	cl_platform_id platform_id = NULL;
 	cl_device_id device_id = NULL;
@@ -294,9 +333,14 @@ int main(int argc, char *argv[]) {
 		switch (c) {
 		case 'h':
 			printf("\nUsage:\n\n");
+			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
+			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %u.\n", DEFAULT_CPI);
+			printf("\n");
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
 			printf("\t\tInterpretation is 2^intensity; the default is 16. Lower if GPU crashes or\n");
 			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
+			printf("\n");
+			printf("\t P - port: which port to use when talking to the siad api.\n");
 			printf("\n");
 			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
 			printf("\t\tyet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.\n");
@@ -304,10 +348,8 @@ int main(int argc, char *argv[]) {
 			printf("\t d - OpenCL device ID: Self-explanatory; it's the GPU index. Note that different\n");
 			printf("\t\tOpenCL platforms will likely have different devices available. Default is 0.\n");
 			printf("\n");
-			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
-			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %ud.\n", DEFAULT_CPI);
-			printf("\n");
 			printPlatformsAndDevices();
+			printf("\n");
 			exit(0);
 			break;
 		case 'I':
@@ -315,16 +357,17 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -I 22)\n");
 				exit(1);
 			}
+			// atoi returns 0 on error
 			intensity = atoi(argv[i]);
-			if (intensity == 0 && argv[i][0] != '0') {
+			if (intensity == 0 && argv[i][0] != '0') { // Check if atoi returned 0 because of an error
 				printf("Invalid number passed to \'-I\'\n");
 				exit(1);
 			}
 			
 			if(intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
 				printf("intensity must be between %u and %u. %u is invalid\n", MIN_INTENSITY, MAX_INTENSITY, intensity);
-				printf("Note that the minimum intensity is %d, and the maximum is %d.\n", MIN_INTENSITY, MAX_INTENSITY);
-				intensity = DEFAULT_INTENSITY;
+				printf("Note that the default intensity is %d\n", DEFAULT_INTENSITY);
+				exit(1);
 			}
 			printf("Intensity set to %u\n", intensity);
 			break;
@@ -333,8 +376,6 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -p 1)\n");
 				exit(1);
 			}
-			// Again, zero return on error. Default is zero.
-			// I don't see  a problem here.
 			platformid = atoi(argv[i]);
 			if (platformid == 0 && argv[i][0] != '0') {
 				printf("Invalid number passed to \'-p\'\n");
@@ -346,7 +387,6 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -d 1)\n");
 				exit(1);
 			}
-			// See comment for previous option.
 			deviceidx = atoi(argv[i]);
 			if (deviceidx == 0 && argv[i][0] != '0') {
 				printf("Invalid number passed to \'-d\'\n");
@@ -361,6 +401,12 @@ int main(int argc, char *argv[]) {
 			cycles_per_iter = atoi(argv[i]);
 			if (cycles_per_iter == 0 && argv[i][0] != '0') {
 				printf("Invalid number passed to \'-C\'\n");
+				exit(1);
+			}
+
+			if(cycles_per_iter < MIN_CPI || cycles_per_iter > MAX_CPI) {
+				printf("cycles per iter must be between %u and %u. %u is invalid\n", MIN_CPI, MAX_CPI, cycles_per_iter);
+				printf("Note that the default cycles per iter is %d\n", DEFAULT_CPI);
 				exit(1);
 			}
 			printf("Cycles per iteration set to %u\n", cycles_per_iter);
@@ -425,10 +471,6 @@ int main(int argc, char *argv[]) {
 	// Create Buffer Objects
 	blockHeadermobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 80 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create blockHeadermobj buffer: %d\n", ret); exit(1); }
-	headerHashmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 32 * sizeof(uint8_t), NULL, &ret);
-	if (ret != CL_SUCCESS) { printf("failed to create headerHashmobj buffer: %d\n", ret); exit(1); }
-	targmobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 32 * sizeof(uint8_t), NULL, &ret);
-	if (ret != CL_SUCCESS) { printf("failed to create targmobj buffer: %d\n", ret); exit(1); }
 	nonceOutmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 8 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1); }
 
@@ -490,7 +532,7 @@ int main(int argc, char *argv[]) {
 		// Repeat until no block is found
 		do {
 			hash_rate = grindNonces(cycles_per_iter);
-		} while (hash_rate == -1);
+		} while (hash_rate == -1 && !quit);
 
 		if (!quit) {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
@@ -504,15 +546,11 @@ int main(int argc, char *argv[]) {
 	ret = clReleaseKernel(kernel);
 	ret = clReleaseProgram(program);
 	ret = clReleaseMemObject(blockHeadermobj);
-	ret = clReleaseMemObject(headerHashmobj);
-	ret = clReleaseMemObject(targmobj);
 	ret = clReleaseMemObject(nonceOutmobj);
 	ret = clReleaseCommandQueue(command_queue);
 	ret = clReleaseContext(context);	
 
 	free_network();
-
 	free(source_str);
-
 	return 0;
 }

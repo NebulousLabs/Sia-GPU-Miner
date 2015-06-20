@@ -5,14 +5,19 @@
 
 #include "network.h"
 
-struct inData {
+// Buffer for receiving data through curl
+struct inBuffer {
 	uint8_t *bytes;
-	size_t len;
+	size_t len; // Number of bytes read in/allocated
 };
 
+// URL strings for receiving and submitting blocks
 char *bfw_url, *submit_url;
+
+// CURL object to connect to siad
 CURL *curl;
 
+// check_http_response
 int check_http_response(CURL *curl) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -23,6 +28,7 @@ int check_http_response(CURL *curl) {
 	return 0;
 }
 
+// set_port establishes the port that siad is on.
 void set_port(char *port) {
 	bfw_url = malloc(29 + strlen(port));
 	submit_url = malloc(28 + strlen(port));
@@ -30,22 +36,24 @@ void set_port(char *port) {
 	sprintf(submit_url, "localhost:%s/miner/submitheader", port);
 }
 
-// Write network data to an array of bytes
-size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
-	if (in == NULL)
-		return size*nmemb;
-	size_t new_len = size*nmemb;
-	in->bytes = (uint8_t*)malloc(new_len);
-	if (in->bytes == NULL) {
+// Write network data to a buffer (inBuf)
+size_t writefunc(void *ptr, size_t size, size_t num_elems, struct inBuffer *inBuf) {
+	if (inBuf == NULL) {
+		return size*num_elems;
+	}
+	size_t new_len = size*num_elems;
+	inBuf->bytes = (uint8_t*)malloc(new_len);
+	if (inBuf->bytes == NULL) {
 		fprintf(stderr, "malloc() failed\n");
 		exit(EXIT_FAILURE);
 	}
-	memcpy(in->bytes, ptr, size*nmemb);
-	in->len = new_len;
+	memcpy(inBuf->bytes, ptr, size*num_elems);
+	inBuf->len = new_len;
 
-	return size*nmemb;
+	return size*num_elems;
 }
 
+// init_network initializes curl networking.
 void init_network() {
 	curl =  curl_easy_init();
 	if (!curl) {
@@ -53,6 +61,8 @@ void init_network() {
 	}
 }
 
+// get_header_for_work fetches a block header from siad. This block header is
+// ready for nonce grinding.
 int get_header_for_work(uint8_t *target, uint8_t *header) {
 	if (!curl) {
 		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
@@ -60,13 +70,13 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	}
 
 	CURLcode res;
-	struct inData in;
+	struct inBuffer inBuf;
 
 	// Get data from siad
 	curl_easy_reset(curl);
 	curl_easy_setopt(curl, CURLOPT_URL, bfw_url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &inBuf);
 
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK) {
@@ -77,20 +87,21 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	if (check_http_response(curl)) {
 		return 1;
 	}
-	if (in.len != 112) {
-		fprintf(stderr, "curl did not receive correct bytes (got %lu, expected 112)\n", in.len);
+	if (inBuf.len != 112) {
+		fprintf(stderr, "curl did not receive correct bytes (got %lu, expected 112)\n", inBuf.len);
 		return 1;
 	}
 
 	// Copy data to return
-	memcpy(target, in.bytes,     32);
-	memcpy(header, in.bytes+32,  80);
+	memcpy(target, inBuf.bytes,     32);
+	memcpy(header, inBuf.bytes+32,  80);
 
-	free(in.bytes);
+	free(inBuf.bytes);
 
 	return 0;
 }
 
+// submit_header submits a block header to siad.
 int submit_header(uint8_t *header) {
 	CURLcode res;
 
@@ -111,6 +122,7 @@ int submit_header(uint8_t *header) {
 	return check_http_response(curl);
 }
 
+// free_network closes the network connection.
 void free_network() {
 	curl_easy_cleanup(curl);
 }
