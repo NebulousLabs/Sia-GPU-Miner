@@ -5,14 +5,16 @@
 
 #include "network.h"
 
-// TODO: document what this does. It should also probably be renamed.
-struct inData {
+// Buffer for receiving data through curl
+struct inBuffer {
 	uint8_t *bytes;
-	size_t len;
+	size_t len; // Number of bytes read in/allocated
 };
 
-// TODO: Is it safe to have these as global variables?
+// URL strings for receiving and submitting blocks
 char *bfw_url, *submit_url;
+
+// CURL object to connect to siad
 CURL *curl;
 
 // check_http_response
@@ -34,22 +36,21 @@ void set_port(char *port) {
 	sprintf(submit_url, "localhost:%s/miner/submitheader", port);
 }
 
-// Write network data to an array of bytes
-//
-// TODO: nmemb is not a good name. 'in' is also probably not a good name.
-size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in) {
-	if (in == NULL)
-		return size*nmemb;
-	size_t new_len = size*nmemb;
-	in->bytes = (uint8_t*)malloc(new_len);
-	if (in->bytes == NULL) {
+// Write network data to a buffer (inBuf)
+size_t writefunc(void *ptr, size_t size, size_t num_elems, struct inBuffer *inBuf) {
+	if (inBuf == NULL) {
+		return size*num_elems;
+	}
+	size_t new_len = size*num_elems;
+	inBuf->bytes = (uint8_t*)malloc(new_len);
+	if (inBuf->bytes == NULL) {
 		fprintf(stderr, "malloc() failed\n");
 		exit(EXIT_FAILURE);
 	}
-	memcpy(in->bytes, ptr, size*nmemb);
-	in->len = new_len;
+	memcpy(inBuf->bytes, ptr, size*num_elems);
+	inBuf->len = new_len;
 
-	return size*nmemb;
+	return size*num_elems;
 }
 
 // init_network initializes curl networking.
@@ -69,13 +70,13 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	}
 
 	CURLcode res;
-	struct inData in;
+	struct inBuffer inBuf;
 
 	// Get data from siad
 	curl_easy_reset(curl);
 	curl_easy_setopt(curl, CURLOPT_URL, bfw_url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &inBuf);
 
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK) {
@@ -86,16 +87,16 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	if (check_http_response(curl)) {
 		return 1;
 	}
-	if (in.len != 112) {
-		fprintf(stderr, "curl did not receive correct bytes (got %lu, expected 112)\n", in.len);
+	if (inBuf.len != 112) {
+		fprintf(stderr, "curl did not receive correct bytes (got %lu, expected 112)\n", inBuf.len);
 		return 1;
 	}
 
 	// Copy data to return
-	memcpy(target, in.bytes,     32);
-	memcpy(header, in.bytes+32,  80);
+	memcpy(target, inBuf.bytes,     32);
+	memcpy(header, inBuf.bytes+32,  80);
 
-	free(in.bytes);
+	free(inBuf.bytes);
 
 	return 0;
 }
