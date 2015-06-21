@@ -56,7 +56,8 @@ static volatile int quit = 0;
 int target_corrupt_flag = 0;
 
 // Set quit variable when SIGINT is received so we can do proper cleanup
-void quitSignal(int __unused) {
+void quitSignal(int unused) {
+	(void)unused; // prevents clang from complaining about an unused variable.
 	quit = 1;
 	printf("\nCaught kill signal, quitting...\n");
 }
