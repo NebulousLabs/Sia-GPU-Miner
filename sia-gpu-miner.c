@@ -38,7 +38,7 @@
 // Number of times the GPU kernel is called between updating the command line text
 #define MIN_CPI 		1     // Must do one call per update
 #define MAX_CPI 		65536 // 2^16 is a slightly arbitrary max
-#define DEFAULT_CPI		3
+#define DEFAULT_CPI		30
 
 // The maximum size of the .cl file we read in and compile
 #define MAX_SOURCE_SIZE 	(0x200000)
