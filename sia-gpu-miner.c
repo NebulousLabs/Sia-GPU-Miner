@@ -4,11 +4,10 @@
  * and libcurl for interacting with the Sia daemon.
  */
 
-// If using Linux, use a more accurate and reliable timer
-#ifdef __linux__
-#define _GNU_SOURCE
-#define _POSIX_SOURCE
-#include <sys/time.h>
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
 #endif
 
 #include <time.h>
@@ -19,13 +18,6 @@
 #include <signal.h>
 
 #include "network.h"
- 
-// OpenCL header is named differently on Apple devices for some reason
-#ifdef __APPLE__
-#include <OpenCL/opencl.h>
-#else
-#include <CL/cl.h>
-#endif
 
 // 2^intensity hashes are calculated each time the kernel is called
 // Minimum of 2^8 (256) because our default local_item_size is 256
@@ -74,26 +66,19 @@ void quitSignal(int __unused) {
 // hash each time
 // Returns -1 if it finds a block, otherwise it returns the hash_rate of the GPU
 double grindNonces(int cycles_per_iter) {
-
-	// Start timing this iteration
-	// If on Linux, use the more reliable/accurate timer, otherwise use default timer
-	#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-	#else
+	// Start timing this iteration.
 	clock_t startTime = clock();
-	#endif
 
 	uint8_t blockHeader[80];
 	uint8_t target[32] = {255};
 	uint8_t nonceOut[8] = {0};
 
-	// Get new block header and target
+	// Get new block header and target.
 	if (get_header_for_work(target, blockHeader) != 0) {
 		return 0;
 	}
 
-	// Check for target corruption
+	// Check for target corruption.
 	int i;
 	if (target[0] != 0 || target[1] != 0) {
 		if (target_corrupt_flag) {
@@ -108,19 +93,20 @@ double grindNonces(int cycles_per_iter) {
 	target_corrupt_flag = 0;
 	size_t global_item_size = 1 << intensity;
 
-	// Copy target to header
+	// Copy target to header.
 	for (i = 0; i < 8; i++) {
 		blockHeader[i + 32] = target[7-i];
 	}
 
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
-	// get_block_for_work too often
+	// get_block_for_work too often.
 	for (i = 0; i < cycles_per_iter; i++) {
-		// Offset global ids so that each loop call tries a different set of hashes
-		uint64_t globalid_offset = i * global_item_size;
+		// Offset global ids so that each loop call tries a different set of
+		// hashes.
+		size_t globalid_offset = i * global_item_size;
 
-		// Copy input data to the memory buffer
+		// Copy input data to the memory buffer.
 		ret = clEnqueueWriteBuffer(command_queue, blockHeadermobj, CL_TRUE, 0, 80 * sizeof(uint8_t), blockHeader, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) {
 			printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1);
@@ -130,7 +116,7 @@ double grindNonces(int cycles_per_iter) {
 			printf("failed to write to targmobj buffer: %d\n", ret); exit(1);
 		}
 
-		// Run the kernel
+		// Run the kernel.
 		ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, &globalid_offset, &global_item_size, &local_item_size, 0, NULL, NULL);
 		if (ret != CL_SUCCESS) {
 			printf("failed to start kernel: %d\n", ret); exit(1);
@@ -145,24 +131,16 @@ double grindNonces(int cycles_per_iter) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			if (!submit_header(blockHeader)) {
-				// Only count block if submit succeeded
+				// Only count block if submit succeeded.
 				blocks_mined++;
 			}
 			return -1;
 		}
 	}
 
-	// If on Linux, use the more reliable/accurate timer, otherwise use default timer
-	// to calculate the hash rate of thie iteration
-	#ifdef __linux__
-	clock_gettime(CLOCK_REALTIME, &end);
-	double nanosecondsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-	double run_time_seconds = nanosecondsElapsed * 1e-9;
-	#else
+	// Calculate the hash rate of thie iteration.
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-	#endif
 	double hash_rate = cycles_per_iter * global_item_size / (run_time_seconds*1000000);
-
 	return hash_rate;
 }
 
@@ -214,7 +192,7 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 		exit(1);
 	}
 	
-	// If we have no devices, indicate this to the user
+	// If we have no devices, indicate this to the user.
 	if(!deviceCount) {
 		printf("OpenCL is reporting no GPU devices available for chosen platform. Nothing to do.\n");
 		free(platformids);
@@ -255,6 +233,7 @@ void printPlatformsAndDevices() {
 
 	ret = clGetPlatformIDs(0, NULL, &platformCount);
 	if (ret != CL_SUCCESS || !platformCount) {
+		printf("Could not find any opencl platforms on your computer.\n");
 		return;
 	}
 	printf("Found %u platform(s) on your computer.\n", platformCount);
@@ -263,6 +242,7 @@ void printPlatformsAndDevices() {
 
 	ret = clGetPlatformIDs(platformCount, platformids, NULL);
 	if (ret != CL_SUCCESS) {
+		printf("Error while fetching platform ids.\n");
 		free(platformids);
 		return;
 	}
@@ -270,37 +250,38 @@ void printPlatformsAndDevices() {
 	int i,j; // Iterate through each platform and print its devices
 	for (i = 0; i < platformCount; i++) {
 		char str[80];
-		// Print platform info
+		// Print platform info.
 		ret = clGetPlatformInfo(platformids[i], CL_PLATFORM_NAME, 80, str, NULL);
 		if (ret != CL_SUCCESS) {
-			free(platformids);
-			return;
+			printf("\tError while fetching platform info.\n");
+			continue;
 		}
 		printf("Devices on platform %d, \"%s\":\n", i, str);
 		ret = clGetDeviceIDs(platformids[i], CL_DEVICE_TYPE_GPU, 0, NULL, &deviceCount);
 		if (ret != CL_SUCCESS) {
-			free(platformids);
-			return;
+			printf("\tError while fetching device ids.\n");
+			continue;
 		}
 		if (!deviceCount) {
+			printf("\tNo devices found for this platform.\n");
 			continue;
 		}
 		deviceids = (cl_device_id *)malloc(sizeof(cl_device_id) * deviceCount);
 
 		ret = clGetDeviceIDs(platformids[i], CL_DEVICE_TYPE_GPU, deviceCount, deviceids, NULL);
 		if (ret != CL_SUCCESS) {
-			free(platformids);
+			printf("\tError while getting device ids.\n");
 			free(deviceids);
-			return;
+			continue;
 		}
 
 		for (j = 0; j < deviceCount; j++) {
-			// Print platform info
+			// Print platform info.
 			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_NAME, 80, str, NULL);
 			if (ret != CL_SUCCESS) {
-				free(platformids);
+				printf("\tError while getting device info.\n");
 				free(deviceids);
-				return;
+				continue;
 			}
 			printf("\tDevice %d: %s\n", j, str);
 		}
@@ -322,12 +303,12 @@ int main(int argc, char *argv[]) {
 	char port_number[6] = "9980";
 	double hash_rate;
 
-	// parse args
+	// Parse args.
 	cycles_per_iter = DEFAULT_CPI;
 	for (i = 1; i < argc; i++) {
 		char c = argv[i][1]; // If argv is "-c" then arv[i][1] is 'c'
 		if (c == '-') {
-			// If they did --flag, make c the next char
+			// If they did --flag, make c the next char.
 			c = argv[i][2];
 		}
 		switch (c) {
@@ -357,7 +338,7 @@ int main(int argc, char *argv[]) {
 				printf("Please pass in a number following your flag (e.g. -I 22)\n");
 				exit(1);
 			}
-			// atoi returns 0 on error
+			// atoi returns 0 on error.
 			intensity = atoi(argv[i]);
 			if (intensity == 0 && argv[i][0] != '0') { // Check if atoi returned 0 because of an error
 				printf("Invalid number passed to \'-I\'\n");
@@ -431,10 +412,10 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	// Set siad URL
+	// Set siad URL.
 	set_port(port_number);
 
-	// Load kernel source file
+	// Load kernel source file.
 	printf("Initializing...\n");
 	fflush(stdout);
 	FILE *fp;
@@ -452,35 +433,35 @@ int main(int argc, char *argv[]) {
 	
 	selectOCLDevice(&platform_id, &device_id, platformid, deviceidx);
 	
-	// Make sure the device can handle our local item size
+	// Make sure the device can handle our local item size.
 	size_t max_group_size = 0;
 	ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &max_group_size, NULL);
 	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
 	if (local_item_size > max_group_size) {
-		printf("Selected device cannot handle work groups larger than %lu.\n", local_item_size);
-		printf("Using work groups of size %lu instead.\n", max_group_size);
+		printf("Selected device cannot handle work groups larger than %zu.\n", local_item_size);
+		printf("Using work groups of size %zu instead.\n", max_group_size);
 		local_item_size = max_group_size;
 	}
 
-	// Create OpenCL Context
+	// Create OpenCL Context.
 	context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 
-	// Create command queue
+	// Create command queue.
 	command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
 
-	// Create Buffer Objects
+	// Create Buffer Objects.
 	blockHeadermobj = clCreateBuffer(context, CL_MEM_READ_ONLY, 80 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create blockHeadermobj buffer: %d\n", ret); exit(1); }
 	nonceOutmobj = clCreateBuffer(context, CL_MEM_READ_WRITE, 8 * sizeof(uint8_t), NULL, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1); }
 
-	// Create kernel program from source file
+	// Create kernel program from source file.
 	program = clCreateProgramWithSource(context, 1, (const char **)&source_str, (const size_t *)&source_size, &ret);
 	if (ret != CL_SUCCESS) { printf("failed to crate program with source: %d\n", ret); exit(1); }
 	ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
 	if (ret != CL_SUCCESS) {
-		// Print information about why the build failed
-		// This code is from StackOverflow
+		// Print information about why the build failed. This code is from
+		// StackOverflow.
 		size_t len;
 		char buffer[204800];
 		cl_build_status bldstatus;
@@ -509,10 +490,10 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	// Create data parallel OpenCL kernel
+	// Create data parallel OpenCL kernel.
 	kernel = clCreateKernel(program, "nonceGrind", &ret);
 
-	// Set OpenCL kernel arguments
+	// Set OpenCL kernel arguments.
 	void *args[] = { &blockHeadermobj, &nonceOutmobj };
 	for (i = 0; i < 2; i++) {
 		ret = clSetKernelArg(kernel, i, sizeof(cl_mem), args[i]);
@@ -523,13 +504,13 @@ int main(int argc, char *argv[]) {
 	}
 	printf("\n");
 
-	// Initialize network connection variables
+	// Initialize network connection variables.
 	init_network();
 
-	// Grind nonces until SIGINT
+	// Grind nonces until SIGINT.
 	signal(SIGINT, quitSignal);
 	while (!quit) {
-		// Repeat until no block is found
+		// Repeat until no block is found.
 		do {
 			hash_rate = grindNonces(cycles_per_iter);
 		} while (hash_rate == -1 && !quit);
@@ -540,7 +521,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	// Finalization
+	// Finalization.
 	ret = clFlush(command_queue);   
 	ret = clFinish(command_queue);
 	ret = clReleaseKernel(kernel);
