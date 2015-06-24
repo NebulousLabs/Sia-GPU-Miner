@@ -316,11 +316,12 @@ int main(int argc, char *argv[]) {
 		case 'h':
 			printf("\nUsage:\n\n");
 			printf("\t C - cycles per iter: Number of kernel executions between Sia API calls and hash rate updates\n");
-			printf("\t\tIncrease this if your miner is receiving invalid targets. Default is %u.\n", DEFAULT_CPI);
+			printf("\t\tA low C will cause instability. As a rule of thumb, the hashrate should only be updating a few times per second.\n");
+			printf("\t\tDefault is %u.\n", DEFAULT_CPI);
 			printf("\n");
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
 			printf("\t\tInterpretation is 2^intensity; the default is 16. Lower if GPU crashes or\n");
-			printf("\t\tif more desktop interactivity is desired. Raising it may improve performance.\n");
+			printf("\t\tif more desktop interactivity is desired. Highest hashrate is typically at 22-25.\n");
 			printf("\n");
 			printf("\t P - port: which port to use when talking to the siad api.\n");
 			printf("\n");
