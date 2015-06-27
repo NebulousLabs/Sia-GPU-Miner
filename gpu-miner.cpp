@@ -23,9 +23,6 @@ uint64_t *nonceOutmobj = nullptr;
 cudaError_t ret;
 cudaStream_t cudastream;
 
-CURL *curl = nullptr;
-char curlerrorbuffer[CURL_ERROR_SIZE];
-
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
 bool target_corrupt_flag = false;
@@ -91,7 +88,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	int i;
 
 	// Get new block header and target
-	if(get_header_for_work(curl, (uint8_t*)target, blockHeader) != 0)
+	if(get_header_for_work((uint8_t*)target, blockHeader) != 0)
 	{
 		return 0;
 	}
@@ -168,7 +165,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 			{
 				// Copy nonce to header.
 				((uint64_t*)blockHeader)[4] = *nonceOut;
-				submit_header(curl, blockHeader);
+				submit_header(blockHeader);
 				blocks_mined++;
 				return -1;
 			}
@@ -187,6 +184,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 int main(int argc, char *argv[])
 {
 	int c;
+	char *tmp;
 	unsigned int deviceid = 0;
 	cudaDeviceProp deviceProp;
 	char *port_number = "9980";
@@ -214,7 +212,7 @@ int main(int argc, char *argv[])
 			exit(0);
 			break;
 		case 'c':
-			sscanf(optarg, "%d", &cycles_per_iter);
+			cycles_per_iter = strtoul(optarg, &tmp, 10);
 			if(cycles_per_iter < 1 || cycles_per_iter > 1000)
 			{
 				printf("Cycles must be at least 1 and no more than 1000\n");
@@ -222,30 +220,21 @@ int main(int argc, char *argv[])
 			}
 			break;
 		case 's':
-			sscanf(optarg, "%lf", &seconds_per_iter);
+			seconds_per_iter = strtod(optarg, &tmp);
 			break;
 		case 'p':
 			port_number = _strdup(optarg);
 			break;
 		case 'd':
-			sscanf(optarg, "%u", &deviceid);
+			deviceid = strtoul(optarg, &tmp, 10);
 			break;
 		}
 	}
 
 	// Set siad URL
-	set_port(port_number);
+	network_init(port_number);
 
 	printf("\nInitializing...\n");
-
-	// Use curl to communicate with siad
-	curl = curl_easy_init();
-	if(curl == NULL)
-	{
-		printf("\nError: can't init curl\n");
-		exit(EXIT_FAILURE);
-	}
-	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerrorbuffer);
 
 	int deviceCount;
 	ret = cudaGetDeviceCount(&deviceCount);
@@ -336,7 +325,7 @@ int main(int argc, char *argv[])
 	}
 	cudaDeviceReset();
 
-	curl_easy_cleanup(curl);
+	network_cleanup();
 
 	return EXIT_SUCCESS;
 }
