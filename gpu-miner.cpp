@@ -205,6 +205,9 @@ int main(int argc, char *argv[])
 	// parse args
 	unsigned int cycles_per_iter = 15;
 	double seconds_per_iter = 10.0;
+
+	printf("\nSia-GPU-Miner 1.04\n");
+
 	while((c = getopt(argc, argv, "hc:s:p:d:")) != -1)
 	{
 		switch(c)
