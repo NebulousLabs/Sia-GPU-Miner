@@ -4,6 +4,14 @@
  * and libcurl for interacting with the Sia daemon.
  */
 
+// Some linux distros need a different timer.
+#ifdef __linux__
+#define _GNU_SOURCE
+#define _POSIX_SOURCE
+#include <sys/time.h>
+#endif
+
+// OpenCL headers are different for Apple.
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
@@ -68,7 +76,12 @@ void quitSignal(int unused) {
 // Returns -1 if it finds a block, otherwise it returns the hash_rate of the GPU
 double grindNonces(int cycles_per_iter) {
 	// Start timing this iteration.
+	#ifdef __linux__
+	struct timespec begin, end;
+	clock_gettime(CLOCK_REALTIME, &begin);
+	#else
 	clock_t startTime = clock();
+	#endif
 
 	uint8_t blockHeader[80];
 	uint8_t target[32] = {255};
@@ -76,7 +89,7 @@ double grindNonces(int cycles_per_iter) {
 
 	// Get new block header and target.
 	if (get_header_for_work(target, blockHeader) != 0) {
-		return 0;
+		return -1;
 	}
 
 	// Check for target corruption.
@@ -139,8 +152,16 @@ double grindNonces(int cycles_per_iter) {
 		}
 	}
 
-	// Calculate the hash rate of thie iteration.
+	// Get the time elapsed this function.
+	#ifdef __linux__
+	clock_gettime(CLOCK_REALTIME, &end);
+	double nsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
+	double run_time_seconds = nsElapsed * 1e-9;
+	#else
 	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
+	#endif
+
+	// Calculate the hash rate of thie iteration.
 	double hash_rate = cycles_per_iter * global_item_size / (run_time_seconds*1000000);
 	return hash_rate;
 }
