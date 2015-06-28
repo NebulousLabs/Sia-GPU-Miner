@@ -4,18 +4,18 @@
  * and libcurl for interacting with the Sia daemon.
  */
 
-// OpenCL headers are different for Apple.
-#ifdef __APPLE__
-#include <OpenCL/opencl.h>
-#else
-#include <CL/cl.h>
-#endif
-
 // Some linux distros need a different timer.
 #ifdef __linux__
 #define _GNU_SOURCE
 #define _POSIX_SOURCE
 #include <sys/time.h>
+#endif
+
+// OpenCL headers are different for Apple.
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
 #endif
 
 #include <time.h>
