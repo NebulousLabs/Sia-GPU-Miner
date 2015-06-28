@@ -82,7 +82,7 @@ static void warnx(const char *fmt, ...)
 	va_list ap;
 	va_start(ap, fmt);
 	if (fmt != NULL)
-		_vsnprintf(opterrmsg, 128, fmt, ap);
+		_vsnprintf_s(opterrmsg, 128, 127, fmt, ap);
 	else
 		opterrmsg[0]='\0';
 	va_end(ap);
@@ -329,8 +329,7 @@ getopt_internal(int nargc, char * const *nargv, const char *options,
 	 * Disable GNU extensions if POSIXLY_CORRECT is set or options
 	 * string begins with a '+'.
 	 */
-	if (posixly_correct == -1)
-		posixly_correct = (getenv("POSIXLY_CORRECT") != NULL);
+	posixly_correct = 0;
 	if (posixly_correct || *options == '+')
 		flags &= ~FLAG_PERMUTE;
 	else if (*options == '-')
