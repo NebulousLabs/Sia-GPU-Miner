@@ -49,9 +49,9 @@ uint64_t rotr64(const uint64_t x, const int offset)
 #define blocksize 256
 #define npt 64
 
-__global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const __restrict__ headerIn, uint64_t *const __restrict__ hashOut, uint64_t *const __restrict__ nonceOut)
+__global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const __restrict__ headerIn, uint64_t *const __restrict__ hashOut, uint64_t *const __restrict__ nonceOut, const uint64_t *const __restrict__ v1)
 {
-	uint64_t header[10], h[4], v[16], v1[16];
+	uint64_t header[10], h[4], v[16];
 	int i;
 
 	const uint32_t id = (blockDim.x * blockIdx.x + threadIdx.x)*npt;
@@ -60,10 +60,6 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const
 	for(i = 0; i < 10; i++)
 		header[i] = headerIn[i];
 
-	v1[0] = 0x6A09E667F2BDC928u + 0x510e527fade682d1u + header[0]; v1[12] = rotr64(0x510E527FADE68281u ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908u + v1[12]; v1[4] = rotr64(0x510e527fade682d1u ^ v1[8], 24);
-	v1[0] = v1[0] + v1[4] + header[1]; v1[12] = rotr64(v1[12] ^ v1[0], 16); v1[8] = v1[8] + v1[12]; v1[4] = rotr64(v1[4] ^ v1[8], 63);
-	v1[1] = 0xbb67ae8584caa73bu + 0x9b05688c2b3e6c1fu + header[2]; v1[13] = rotr64(0x9b05688c2b3e6c1fu ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bu + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1fu ^ v1[9], 24);
-	v1[1] = v1[1] + v1[5] + header[3]; v1[13] = rotr64(v1[13] ^ v1[1], 16); v1[9] = v1[9] + v1[13]; v1[5] = rotr64(v1[5] ^ v1[9], 63);
 	for(i = 0; i < npt; i++)
 	{
 		((uint32_t*)header)[8] = id + i;
@@ -282,9 +278,9 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const
 	}
 }
 
-void nonceGrindcuda(cudaStream_t cudastream, uint32_t threads, uint64_t *blockHeader, uint64_t *headerHash, uint64_t *nonceOut)
+void nonceGrindcuda(cudaStream_t cudastream, uint32_t threads, uint64_t *blockHeader, uint64_t *headerHash, uint64_t *nonceOut, uint64_t *vpre)
 {
-	nonceGrind <<<threads / blocksize / npt, blocksize, 0, cudastream >>>(blockHeader, headerHash, nonceOut);
+	nonceGrind <<<threads / blocksize / npt, blocksize, 0, cudastream >>>(blockHeader, headerHash, nonceOut, vpre);
 }
 
 

@@ -20,12 +20,15 @@ using namespace std;
 uint64_t *blockHeadermobj = nullptr;
 uint64_t *headerHashmobj = nullptr;
 uint64_t *nonceOutmobj = nullptr;
+uint64_t *vpre = nullptr;
 cudaError_t ret;
 cudaStream_t cudastream;
 
 unsigned int blocks_mined = 0;
 static volatile int quit = 0;
 bool target_corrupt_flag = false;
+
+#define rotr64(x, n)  (((x) >> (n)) | ((x) << (64 - (n))))
 
 void quitSignal(int __unused)
 {
@@ -66,6 +69,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	static uint32_t *target = nullptr;
 	static uint64_t *nonceOut = nullptr;
 	static uint8_t *blockHeader = nullptr;
+	static uint64_t *v1 = nullptr;
 
 	if(!init)
 	{
@@ -73,10 +77,11 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		cudaMallocHost(&target, 32);
 		cudaMallocHost(&nonceOut, 8);
 		cudaMallocHost(&blockHeader, 80);
+		cudaMallocHost(&v1, 16*8);
 		ret = cudaGetLastError();
 		if(ret != cudaSuccess)
 		{
-			printf("%s\n", cudaGetErrorString(ret)); exit(1);
+			printf("grindNonces init failed: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
 		init = true;
 	}
@@ -112,6 +117,17 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	target_corrupt_flag = 0;
 	*nonceOut = 0;
 
+	v1[0] = 0x6A09E667F2BDC928u + 0x510e527fade682d1u + ((uint64_t*)blockHeader)[0]; v1[12] = rotr64(0x510E527FADE68281u ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908u + v1[12]; v1[4] = rotr64(0x510e527fade682d1u ^ v1[8], 24);
+	v1[0] = v1[0] + v1[4] + ((uint64_t*)blockHeader)[1]; v1[12] = rotr64(v1[12] ^ v1[0], 16); v1[8] = v1[8] + v1[12]; v1[4] = rotr64(v1[4] ^ v1[8], 63);
+	v1[1] = 0xbb67ae8584caa73bu + 0x9b05688c2b3e6c1fu + ((uint64_t*)blockHeader)[2]; v1[13] = rotr64(0x9b05688c2b3e6c1fu ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bu + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1fu ^ v1[9], 24);
+	v1[1] = v1[1] + v1[5] + ((uint64_t*)blockHeader)[3]; v1[13] = rotr64(v1[13] ^ v1[1], 16); v1[9] = v1[9] + v1[13]; v1[5] = rotr64(v1[5] ^ v1[9], 63);
+
+	ret = cudaMemcpyAsync(vpre, v1, 16 * 8, cudaMemcpyHostToDevice, cudastream);
+	if(ret != cudaSuccess)
+	{
+		printf("failed to write vpre buffer: %s\n", cudaGetErrorString(ret)); exit(1);
+	}
+
 	for(i = 0; i < cycles_per_iter; i++)
 	{
 		blockHeader[38] = i / 256;
@@ -121,21 +137,16 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		ret = cudaMemcpyAsync(blockHeadermobj, blockHeader, 80, cudaMemcpyHostToDevice, cudastream);
 		if(ret != cudaSuccess)
 		{
-			printf("failed to write to blockHeadermobj buffer: %d\n", ret); exit(1);
-		}
-		ret = cudaMemcpyAsync(headerHashmobj, headerHash, 32, cudaMemcpyHostToDevice, cudastream);
-		if(ret != cudaSuccess)
-		{
-			printf("failed to write to headerHashmobj buffer: %d\n", ret); exit(1);
+			printf("failed to write to blockHeadermobj buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
 		ret = cudaMemcpyAsync(nonceOutmobj, nonceOut, 8, cudaMemcpyHostToDevice, cudastream);
 		if(ret != cudaSuccess)
 		{
-			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
+			printf("failed to write nonce to buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
 
-		extern void nonceGrindcuda(cudaStream_t, uint32_t, uint64_t *, uint64_t *, uint64_t *);
-		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, nonceOutmobj);
+		extern void nonceGrindcuda(cudaStream_t, uint32_t, uint64_t *, uint64_t *, uint64_t *, uint64_t *);
+		nonceGrindcuda(cudastream, items_per_iter, blockHeadermobj, headerHashmobj, nonceOutmobj, vpre);
 		ret = cudaGetLastError();
 		if(ret != cudaSuccess)
 		{
@@ -146,13 +157,13 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		ret = cudaMemcpyAsync(headerHash, headerHashmobj, 32, cudaMemcpyDeviceToHost, cudastream);
 		if(ret != cudaSuccess)
 		{
-			printf("failed to read header hash from buffer: %d\n", ret); exit(1);
+			printf("failed to read header hash from buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
 
 		ret = cudaMemcpyAsync(nonceOut, nonceOutmobj, 8, cudaMemcpyDeviceToHost, cudastream);
 		if(ret != cudaSuccess)
 		{
-			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
+			printf("failed to read nonce from buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 		}
 		cudaStreamSynchronize(cudastream);
 
@@ -278,17 +289,22 @@ int main(int argc, char *argv[])
 	ret = cudaMalloc(&blockHeadermobj, 80);
 	if(ret != cudaSuccess)
 	{
-		printf("failed to create blockHeadermobj buffer: %d\n", ret); exit(1);
+		printf("failed to create blockHeadermobj buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 	ret = cudaMalloc(&headerHashmobj, 32);
 	if(ret != cudaSuccess)
 	{
-		printf("failed to create headerHashmobj buffer: %d\n", ret); exit(1);
+		printf("failed to create headerHashmobj buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 	ret = cudaMalloc(&nonceOutmobj, 8);
 	if(ret != cudaSuccess)
 	{
-		printf("failed to create nonceOutmobj buffer: %d\n", ret); exit(1);
+		printf("failed to create nonceOutmobj buffer: %s\n", cudaGetErrorString(ret)); exit(1);
+	}
+	ret = cudaMalloc(&vpre, 16*8);
+	if(ret != cudaSuccess)
+	{
+		printf("failed to create vpre buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
 
 	chrono::time_point<chrono::system_clock> startTime, endTime;
