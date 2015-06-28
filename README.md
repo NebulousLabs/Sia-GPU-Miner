@@ -1,4 +1,4 @@
-# Sia-GPU-Miner
+# Sia-CUDA-Miner
 A GPU miner designed for mining siacoins. This miner runs in a command prompt and prints your hashrate along side the number of blocks you've mined.
 
 ## How to Use

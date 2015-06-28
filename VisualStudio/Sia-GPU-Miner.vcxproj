@@ -22,6 +22,7 @@
     <ProjectGuid>{2A827AAD-661D-45BB-A7A7-4266899377D3}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>SiaGPUMiner</RootNamespace>
+    <ProjectName>Sia-CUDA-Miner</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
