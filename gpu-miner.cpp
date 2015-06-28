@@ -165,8 +165,8 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 			{
 				// Copy nonce to header.
 				((uint64_t*)blockHeader)[4] = *nonceOut;
-				submit_header(blockHeader);
-				blocks_mined++;
+				if(submit_header(blockHeader))
+					blocks_mined++;
 				return -1;
 			}
 			*nonceOut = 0;

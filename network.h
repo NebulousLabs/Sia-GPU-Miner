@@ -9,6 +9,6 @@ struct inData
 
 void set_port(char *port);
 int get_header_for_work(uint8_t *target, uint8_t *header);
-void submit_header(uint8_t *header);
+bool submit_header(uint8_t *header);
 void network_init(const char *port);
 void network_cleanup(void);

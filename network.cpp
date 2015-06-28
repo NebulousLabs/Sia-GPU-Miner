@@ -10,6 +10,7 @@ extern double target_to_diff(const uint32_t *const target);
 static char bfw_url[255], submit_url[255];
 static CURL *curl;
 static char curlerrorbuffer[CURL_ERROR_SIZE];
+struct inData in;
 
 // Write network data to an array of bytes
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
@@ -17,16 +18,17 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
 	size_t new_len = size*nmemb;
 	if(in == NULL || new_len == 0)
 		return 0;
+
 	in->bytes = (uint8_t*)realloc(in->bytes, in->len + new_len);
 	if(in->bytes == NULL)
 	{
 		fprintf(stderr, "malloc() failed\n");
 		exit(EXIT_FAILURE);
 	}
-	memcpy(in->bytes + in->len, ptr, size*nmemb);
+	memcpy(in->bytes + in->len, ptr, new_len);
 	in->len += new_len;
 
-	return size*nmemb;
+	return new_len;
 }
 
 void network_init(const char *port)
@@ -47,6 +49,7 @@ void network_init(const char *port)
 	sprintf_s(bfw_url, 254, "http://%s:%s/miner/headerforwork", domain, port);
 	sprintf_s(submit_url, 254, "http://%s:%s/miner/submitheader", domain, port);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
 }
 
 void network_cleanup(void)
@@ -60,9 +63,16 @@ int check_http_response(CURL *curl)
 	CURLcode err = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	if(err == CURLE_OK)
 	{
-		if(http_code != 200)
+		if(http_code != 200 && http_code != 0)
 		{
-			fprintf(stderr, "HTTP error %lu\n", http_code);
+			fprintf(stderr, "\nHTTP error %lu", http_code);
+			if(in.len > 0)
+			{
+				in.bytes = (uint8_t*)realloc(in.bytes, in.len + 1);
+				*(in.bytes + in.len) = 0;
+				printf(": %s", in.bytes);
+			}
+			printf("\n");
 			return 1;
 		}
 	}
@@ -75,7 +85,6 @@ int get_header_for_work(uint8_t *target, uint8_t *header)
 	double tmp;
 
 	CURLcode res;
-	struct inData in;
 	in.bytes = NULL;
 	in.len = 0;
 
@@ -89,7 +98,6 @@ int get_header_for_work(uint8_t *target, uint8_t *header)
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
 
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK)
@@ -124,10 +132,9 @@ int get_header_for_work(uint8_t *target, uint8_t *header)
 	return 0;
 }
 
-void submit_header(uint8_t *header)
+bool submit_header(uint8_t *header)
 {
 	CURLcode res;
-	struct inData in;
 	in.len = 0;
 	in.bytes = NULL;
 		
@@ -139,8 +146,9 @@ void submit_header(uint8_t *header)
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
+	curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, 80);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 80);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
 
 	res = curl_easy_perform(curl);
@@ -151,7 +159,15 @@ void submit_header(uint8_t *header)
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
-	check_http_response(curl);
-	free(in.bytes);
+	if(check_http_response(curl) != 0)
+	{
+		free(in.bytes);
+		return false;
+	}
+	else
+	{
+		free(in.bytes);
+		return true;
+	}
 }
 
