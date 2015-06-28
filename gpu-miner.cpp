@@ -247,6 +247,20 @@ int main(int argc, char *argv[])
 
 	printf("\nInitializing...\n");
 
+	int version;
+	ret = cudaDriverGetVersion(&version);
+	if(ret != cudaSuccess)
+	{
+		printf("Unable to query CUDA driver version! Is an nVidia driver installed?\n");
+		exit(1);
+	}
+
+	if(version < CUDART_VERSION)
+	{
+		printf("Driver does not support CUDA %d.%d API! Update your nVidia driver!\n", CUDART_VERSION / 1000, (CUDART_VERSION % 1000) / 10);
+		exit(1);
+	}
+
 	int deviceCount;
 	ret = cudaGetDeviceCount(&deviceCount);
 	if(ret != cudaSuccess)
