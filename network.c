@@ -32,8 +32,8 @@ int check_http_response(CURL *curl) {
 void set_port(char *port) {
 	bfw_url = malloc(29 + strlen(port));
 	submit_url = malloc(28 + strlen(port));
-	sprintf(bfw_url, "localhost:%s/miner/headerforwork", port);
-	sprintf(submit_url, "localhost:%s/miner/submitheader", port);
+	sprintf(bfw_url, "localhost%s/miner/headerforwork", port);
+	sprintf(submit_url, "localhost%s/miner/submitheader", port);
 }
 
 // Write network data to a buffer (inBuf)
@@ -77,7 +77,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK) {
-		fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		fprintf(stderr, "Failed to get header from %s, curl_easy_perform() failed: %s\n", bfw_url, curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		// Pause in order to prevent spamming the console
 		printf("Would you like to retry connecting? (y/n)");
