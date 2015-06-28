@@ -58,16 +58,13 @@ void init_network() {
 	curl =  curl_easy_init();
 	if (!curl) {
 		fprintf(stderr, "Error on curl_easy_init().\n");
+		exit(1);
 	}
 }
 
 // get_header_for_work fetches a block header from siad. This block header is
 // ready for nonce grinding.
 int get_header_for_work(uint8_t *target, uint8_t *header) {
-	if (!curl) {
-		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
-		exit(1);
-	}
 
 	CURLcode res;
 	struct inBuffer inBuf;
@@ -82,8 +79,19 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 	if(res != CURLE_OK) {
 		fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
-		exit(1);
+		// Pause in order to prevent spamming the console
+		printf("Would you like to retry connecting? (y/n)");
+		do {
+			char ans = getchar();
+			if (ans == 'n' || ans == 'N') {
+				exit(1);
+			}
+			if (ans == 'y' || ans == 'Y') {
+				return 1;
+			}
+		} while (1);
 	}
+
 	if (check_http_response(curl)) {
 		return 1;
 	}
@@ -117,7 +125,7 @@ int submit_header(uint8_t *header) {
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		exit(1);
+		return 1;
 	}
 	return check_http_response(curl);
 }
