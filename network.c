@@ -1,6 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef __linux__
+#include <unistd.h>
+#endif
+#ifdef __WINDOWS__
+#include <windows.h>
+#endif
+
 #include <curl/curl.h>
 
 #include "network.h"
@@ -22,7 +30,7 @@ int check_http_response(CURL *curl) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	if (http_code != 200) {
-		fprintf(stderr, "HTTP error %lu", http_code);
+		fprintf(stderr, "HTTP error %lu\n", http_code);
 		return 1;
 	}
 	return 0;
@@ -80,16 +88,12 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 		fprintf(stderr, "Failed to get header from %s, curl_easy_perform() failed: %s\n", bfw_url, curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		// Pause in order to prevent spamming the console
-		printf("Would you like to retry connecting? (y/n)");
-		do {
-			char ans = getchar();
-			if (ans == 'n' || ans == 'N') {
-				exit(1);
-			}
-			if (ans == 'y' || ans == 'Y') {
-				return 1;
-			}
-		} while (1);
+#ifdef __linux__
+		sleep(3); // 3 seconds
+#endif
+#ifdef __WINDOWS__
+		Sleep(3000); // 3 seconds
+#endif
 	}
 
 	if (check_http_response(curl)) {
