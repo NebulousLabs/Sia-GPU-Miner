@@ -1,6 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef __linux__
+#include <unistd.h>
+#endif
+#ifdef __WINDOWS__
+#include <windows.h>
+#endif
+
 #include <curl/curl.h>
 
 #include "network.h"
@@ -22,7 +30,7 @@ int check_http_response(CURL *curl) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	if (http_code != 200) {
-		fprintf(stderr, "HTTP error %lu", http_code);
+		fprintf(stderr, "HTTP error %lu\n", http_code);
 		return 1;
 	}
 	return 0;
@@ -32,8 +40,8 @@ int check_http_response(CURL *curl) {
 void set_port(char *port) {
 	bfw_url = malloc(29 + strlen(port));
 	submit_url = malloc(28 + strlen(port));
-	sprintf(bfw_url, "localhost:%s/miner/headerforwork", port);
-	sprintf(submit_url, "localhost:%s/miner/submitheader", port);
+	sprintf(bfw_url, "localhost%s/miner/headerforwork", port);
+	sprintf(submit_url, "localhost%s/miner/submitheader", port);
 }
 
 // Write network data to a buffer (inBuf)
@@ -58,16 +66,13 @@ void init_network() {
 	curl =  curl_easy_init();
 	if (!curl) {
 		fprintf(stderr, "Error on curl_easy_init().\n");
+		exit(1);
 	}
 }
 
 // get_header_for_work fetches a block header from siad. This block header is
 // ready for nonce grinding.
 int get_header_for_work(uint8_t *target, uint8_t *header) {
-	if (!curl) {
-		fprintf(stderr, "Invalid curl object passed to get_block_for_work()\n");
-		exit(1);
-	}
 
 	CURLcode res;
 	struct inBuffer inBuf;
@@ -80,10 +85,17 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK) {
-		fprintf(stderr, "Failed to get block for work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+		fprintf(stderr, "Failed to get header from %s, curl_easy_perform() failed: %s\n", bfw_url, curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
-		exit(1);
+		// Pause in order to prevent spamming the console
+#ifdef __linux__
+		sleep(3); // 3 seconds
+#endif
+#ifdef __WINDOWS__
+		Sleep(3000); // 3 seconds
+#endif
 	}
+
 	if (check_http_response(curl)) {
 		return 1;
 	}
@@ -117,7 +129,7 @@ int submit_header(uint8_t *header) {
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		exit(1);
+		return 1;
 	}
 	return check_http_response(curl);
 }

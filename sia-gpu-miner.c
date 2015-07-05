@@ -322,7 +322,7 @@ int main(int argc, char *argv[]) {
 	cl_uint platformid = 0, deviceidx = 0;
 	int i;
 	unsigned cycles_per_iter;
-	char port_number[6] = "9980";
+	char port_number[7] = ":9980";
 	double hash_rate;
 
 	// Parse args.
@@ -344,7 +344,7 @@ int main(int argc, char *argv[]) {
 			printf("\t\tInterpretation is 2^intensity; the default is 16. Lower if GPU crashes or\n");
 			printf("\t\tif more desktop interactivity is desired. Highest hashrate is typically at 22-25.\n");
 			printf("\n");
-			printf("\t P - port: which port to use when talking to the siad api.\n");
+			printf("\t P - port: which port to use when talking to the siad api. (e.g. -p :9980)\n");
 			printf("\n");
 			printf("\t p - OpenCL platform ID: Just what it says on the tin. If you're finding no GPUs,\n");
 			printf("\t\tyet you're sure they exist, try a value other than 0, like 1, or 2. Default is 0.\n");
@@ -417,7 +417,7 @@ int main(int argc, char *argv[]) {
 			break;
 		case 'P':
 			if (++i >= argc) {
-				printf("Please pass in a port number following your flag (e.g. -P 9980)\n");
+				printf("Please pass in a port number following your flag (e.g. -P :9980)\n");
 				exit(1);
 			}
 			if (strlen(argv[i]) < 6) {
