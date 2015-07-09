@@ -33,7 +33,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
 
 void network_init(const char *port)
 {
-	char *domain = "localhost";
+	char *domain = (char*)"localhost";
 	curl = curl_easy_init();
 	if(curl == NULL)
 	{
@@ -46,8 +46,8 @@ void network_init(const char *port)
 		printf("\nmalloc error\n");
 		exit(EXIT_FAILURE);
 	}
-	sprintf_s(bfw_url, 254, "http://%s:%s/miner/headerforwork", domain, port);
-	sprintf_s(submit_url, 254, "http://%s:%s/miner/submitheader", domain, port);
+	sprintf(bfw_url, "http://%s:%s/miner/headerforwork", domain, port);
+	sprintf(submit_url, "http://%s:%s/miner/submitheader", domain, port);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
 }
