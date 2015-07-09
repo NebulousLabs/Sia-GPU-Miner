@@ -10,12 +10,13 @@ using namespace std;
 #else
 #include <getopt.h>
 #endif
-//#include <unistd.h>
+
+#ifndef _MSC_VER
+#define _strdup(x) strdup(x)
+#endif
+
 #include <cuda_runtime.h>
-
 #include "network.h"
-
-#define MAX_SOURCE_SIZE (0x200000)
 
 uint64_t *blockHeadermobj = nullptr;
 uint64_t *headerHashmobj = nullptr;
@@ -198,7 +199,7 @@ int main(int argc, char *argv[])
 	char *tmp;
 	unsigned int deviceid = 0;
 	cudaDeviceProp deviceProp;
-	char *port_number = "9980";
+	char *port_number = (char*)"9980";
 	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
 
