@@ -118,9 +118,9 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	target_corrupt_flag = 0;
 	*nonceOut = 0;
 
-	v1[0] = 0x6A09E667F2BDC928u + 0x510e527fade682d1u + ((uint64_t*)blockHeader)[0]; v1[12] = rotr64(0x510E527FADE68281u ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908u + v1[12]; v1[4] = rotr64(0x510e527fade682d1u ^ v1[8], 24);
+	v1[0] = 0x6A09E667F2BDC928ull + 0x510e527fade682d1ull + ((uint64_t*)blockHeader)[0]; v1[12] = rotr64(0x510E527FADE68281ull ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908ull + v1[12]; v1[4] = rotr64(0x510e527fade682d1ull ^ v1[8], 24);
 	v1[0] = v1[0] + v1[4] + ((uint64_t*)blockHeader)[1]; v1[12] = rotr64(v1[12] ^ v1[0], 16); v1[8] = v1[8] + v1[12]; v1[4] = rotr64(v1[4] ^ v1[8], 63);
-	v1[1] = 0xbb67ae8584caa73bu + 0x9b05688c2b3e6c1fu + ((uint64_t*)blockHeader)[2]; v1[13] = rotr64(0x9b05688c2b3e6c1fu ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bu + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1fu ^ v1[9], 24);
+	v1[1] = 0x566D1711B0092000ull + ((uint64_t*)blockHeader)[2]; v1[13] = rotr64(0x9b05688c2b3e6c1full ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bull + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1full ^ v1[9], 24);
 	v1[1] = v1[1] + v1[5] + ((uint64_t*)blockHeader)[3]; v1[13] = rotr64(v1[13] ^ v1[1], 16); v1[9] = v1[9] + v1[13]; v1[5] = rotr64(v1[5] ^ v1[9], 63);
 
 	ret = cudaMemcpyAsync(vpre, v1, 16 * 8, cudaMemcpyHostToDevice, cudastream);
