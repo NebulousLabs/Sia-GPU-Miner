@@ -1,21 +1,28 @@
-all-flags = -c -std=c11 -Wall -pedantic -O2
-gcc-libs = -lOpenCL -lcurl
-clang-libs =  -lcurl -framework OpenCL
+ifeq ($(shell uname -s),Darwin)
+	CC ?= clang
+	LDLIBS += -lcurl -framework OpenCL
+else
+	CC ?= gcc
+	LDLIBS += -lOpenCL -lcurl
+endif
 
-all:
-	@echo "commands: clean, linux, mac"
+CFLAGS += -c -std=c11 -Wall -pedantic -O2
 
-linux:
-	gcc $(all-flags) sia-gpu-miner.c -o sia-gpu-miner.o
-	gcc $(all-flags) network.c -o network.o
-	gcc sia-gpu-miner.o network.o -o sia-gpu-miner $(gcc-libs)
+TARGET = sia-gpu-miner
 
-mac:
-	clang $(all-flags) sia-gpu-miner.c -o sia-gpu-miner.o
-	clang $(all-flags) network.c -o network.o
-	clang sia-gpu-miner.o network.o -o sia-gpu-miner $(clang-libs)
+SOURCES = sia-gpu-miner.c network.c
+
+OBJECTS = $(patsubst %.c,%.o,$(SOURCES))
+
+all: $(TARGET)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -o $@ $<
+
+$(TARGET): $(OBJECTS)
+	$(CC) -o $@ $^ $(LDLIBS)
 
 clean:
-	rm sia-gpu-miner *.o
+	rm -f $(TARGET) $(OBJECTS)
 
-.PHONY: all linux mac clean
+.PHONY: all clean
