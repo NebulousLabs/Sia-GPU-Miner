@@ -170,7 +170,7 @@
     </Link>
     <CudaCompile>
       <CudaRuntime>Static</CudaRuntime>
-      <CodeGeneration>compute_30,sm_30;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
+      <CodeGeneration>compute_30,sm_30;compute_32,sm_32;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
       <Optimization>O2</Optimization>
       <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
@@ -202,7 +202,7 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <CudaRuntime>Static</CudaRuntime>
-      <CodeGeneration>compute_30,compute_30;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
+      <CodeGeneration>compute_30,sm_30;compute_32,sm_32;compute_35,sm_35;compute_50,sm_50;compute_52,sm_52</CodeGeneration>
       <Optimization>O2</Optimization>
       <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
