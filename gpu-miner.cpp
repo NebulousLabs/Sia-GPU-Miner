@@ -208,6 +208,20 @@ int main(int argc, char *argv[])
 	double seconds_per_iter = 10.0;
 
 	printf("\nSia-CUDA-Miner 1.06\n");
+#ifdef _MSC_VER
+	printf("Compiled with Visual C++ %d\n", _MSC_VER/100);
+#else
+#ifdef __clang__
+	printf("Compiled with Clang %s\n", __clang_version__);
+#else
+#ifdef __GNUC__
+	printf("Compiled with GCC %d.&d\n", __GNUC__, __GNUC_MINOR__);
+#else
+	printf("Compiled with an unusual compiler\n");
+#endif
+#endif
+#endif
+	printf("Using Nvidia CUDA Toolkit %d.%d\n", CUDART_VERSION / 1000, (CUDART_VERSION % 1000) / 10);
 
 	while((c = getopt(argc, argv, "hc:s:p:d:")) != -1)
 	{
