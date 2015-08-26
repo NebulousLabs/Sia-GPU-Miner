@@ -36,12 +36,12 @@ int check_http_response(CURL *curl) {
 	return 0;
 }
 
-// set_port establishes the port that siad is on.
-void set_port(char *port) {
-	bfw_url = malloc(29 + strlen(port));
-	submit_url = malloc(28 + strlen(port));
-	sprintf(bfw_url, "localhost%s/miner/headerforwork", port);
-	sprintf(submit_url, "localhost%s/miner/submitheader", port);
+// set_host establishes the port that siad is on.
+void set_host(char *host, char *port) {
+	bfw_url = malloc(21 + strlen(host) + strlen(port));
+	submit_url = malloc(20 + strlen(host) + strlen(port));
+	sprintf(bfw_url, "%s%s/miner/headerforwork", host, port);
+	sprintf(submit_url, "%s%s/miner/submitheader", host, port);
 }
 
 // Write network data to a buffer (inBuf)
