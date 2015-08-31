@@ -36,7 +36,7 @@ int check_http_response(CURL *curl) {
 	return 0;
 }
 
-// set_host establishes the port that siad is on.
+// set_host establishes the hostname and port that siad is on.
 void set_host(char *host, char *port) {
 	bfw_url = malloc(21 + strlen(host) + strlen(port));
 	submit_url = malloc(20 + strlen(host) + strlen(port));
