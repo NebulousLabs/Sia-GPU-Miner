@@ -322,6 +322,7 @@ int main(int argc, char *argv[]) {
 	cl_uint platformid = 0, deviceidx = 0;
 	int i;
 	unsigned cycles_per_iter;
+	char hostname[128] = "localhost";
 	char port_number[7] = ":9980";
 	double hash_rate;
 
@@ -343,6 +344,8 @@ int main(int argc, char *argv[]) {
 			printf("\t I - intensity: This is the amount of work sent to the GPU in one batch.\n");
 			printf("\t\tInterpretation is 2^intensity; the default is 16. Lower if GPU crashes or\n");
 			printf("\t\tif more desktop interactivity is desired. Highest hashrate is typically at 22-25.\n");
+			printf("\n");
+			printf("\t H - host: which host name to use when talking to the siad api. (default: %s)\n", hostname);
 			printf("\n");
 			printf("\t P - port: which port to use when talking to the siad api. (e.g. -p :9980)\n");
 			printf("\n");
@@ -415,6 +418,14 @@ int main(int argc, char *argv[]) {
 			}
 			printf("Cycles per iteration set to %u\n", cycles_per_iter);
 			break;
+		case 'H':
+			if (++i >= argc) {
+				printf("Please pass in a host name following your flag (e.g. -H localhost)\n");
+				exit(1);
+			}
+			strcpy(hostname, argv[i]);
+			printf("Host name set to %s\n", hostname);
+			break;
 		case 'P':
 			if (++i >= argc) {
 				printf("Please pass in a port number following your flag (e.g. -P :9980)\n");
@@ -436,7 +447,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Set siad URL.
-	set_port(port_number);
+	set_host(hostname, port_number);
 
 	// Load kernel source file.
 	printf("Initializing...\n");
