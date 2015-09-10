@@ -34,7 +34,7 @@ bool target_corrupt_flag = false;
 void quitSignal(int __unused)
 {
 	quit = 1;
-	printf("\nCaught deadly signal, quitting...\n");
+	printf("\nquitting...\n");
 }
 
 #if ((__GNUC__ > 4) || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3))
@@ -78,7 +78,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 		cudaMallocHost(&target, 32);
 		cudaMallocHost(&nonceOut, 8);
 		cudaMallocHost(&blockHeader, 80);
-		cudaMallocHost(&v1, 16*8);
+		cudaMallocHost(&v1, 16 * 8);
 		ret = cudaGetLastError();
 		if(ret != cudaSuccess)
 		{
@@ -118,10 +118,10 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	target_corrupt_flag = 0;
 	*nonceOut = 0;
 
-	v1[0] = 0x6A09E667F2BDC928u + 0x510e527fade682d1u + ((uint64_t*)blockHeader)[0]; v1[12] = rotr64(0x510E527FADE68281u ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908u + v1[12]; v1[4] = rotr64(0x510e527fade682d1u ^ v1[8], 24);
-	v1[0] = v1[0] + v1[4] + ((uint64_t*)blockHeader)[1]; v1[12] = rotr64(v1[12] ^ v1[0], 16); v1[8] = v1[8] + v1[12]; v1[4] = rotr64(v1[4] ^ v1[8], 63);
-	v1[1] = 0xbb67ae8584caa73bu + 0x9b05688c2b3e6c1fu + ((uint64_t*)blockHeader)[2]; v1[13] = rotr64(0x9b05688c2b3e6c1fu ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bu + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1fu ^ v1[9], 24);
-	v1[1] = v1[1] + v1[5] + ((uint64_t*)blockHeader)[3]; v1[13] = rotr64(v1[13] ^ v1[1], 16); v1[9] = v1[9] + v1[13]; v1[5] = rotr64(v1[5] ^ v1[9], 63);
+	v1[0] = 0xBB1838E7A0A44BF9u + ((uint64_t*)blockHeader)[0]; v1[12] = rotr64(0x510E527FADE68281u ^ v1[0], 32); v1[8] = 0x6a09e667f3bcc908u + v1[12]; v1[4] = rotr64(0x510e527fade682d1u ^ v1[8], 24);
+	v1[0] = v1[0] + v1[4] + ((uint64_t*)blockHeader)[1];       v1[12] = rotr64(v1[12] ^ v1[0], 16);              v1[8] = v1[8] + v1[12];               v1[4] = rotr64(v1[4] ^ v1[8], 63);
+	v1[1] = 0x566D1711B009135Au + ((uint64_t*)blockHeader)[2]; v1[13] = rotr64(0x9b05688c2b3e6c1fu ^ v1[1], 32); v1[9] = 0xbb67ae8584caa73bu + v1[13]; v1[5] = rotr64(0x9b05688c2b3e6c1fu ^ v1[9], 24);
+	v1[1] = v1[1] + v1[5] + ((uint64_t*)blockHeader)[3];       v1[13] = rotr64(v1[13] ^ v1[1], 16);              v1[9] = v1[9] + v1[13];               v1[5] = rotr64(v1[5] ^ v1[9], 63);
 
 	ret = cudaMemcpyAsync(vpre, v1, 16 * 8, cudaMemcpyHostToDevice, cudastream);
 	if(ret != cudaSuccess)
@@ -173,7 +173,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 			int j = 4;
 			while(headerHash[j] == ((uint8_t*)target)[j] && j<32)
 				j++;
-			if(j==32 || headerHash[j] < ((uint8_t*)target)[j])
+			if(j == 32 || headerHash[j] < ((uint8_t*)target)[j])
 			{
 				// Copy nonce to header.
 				((uint64_t*)blockHeader)[4] = *nonceOut;
@@ -186,7 +186,7 @@ double grindNonces(uint32_t items_per_iter, int cycles_per_iter)
 	}
 
 	// Hashrate is inaccurate if a block was found
-	endTime=chrono::system_clock::now();
+	endTime = chrono::system_clock::now();
 	double elapsedTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count() / 1000000.0;
 	double hash_rate = cycles_per_iter * (double)items_per_iter / elapsedTime / 1000000;
 
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
 
 	printf("\nSia-CUDA-Miner 1.06\n");
 #ifdef _MSC_VER
-	printf("Compiled with Visual C++ %d\n", _MSC_VER/100);
+	printf("Compiled with Visual C++ %d\n", _MSC_VER / 100);
 #else
 #ifdef __clang__
 	printf("Compiled with Clang %s\n", __clang_version__);
@@ -227,36 +227,36 @@ int main(int argc, char *argv[])
 	{
 		switch(c)
 		{
-		case 'h':
-			printf("\nUsage:\n\n");
-			printf("\t c - cycles: number of hashing loops between API calls\n");
-			printf("\t default: %d\n", cycles_per_iter);
-			printf("\t\tIncrease this if your computer is freezing or locking up\n");
-			printf("\n");
-			printf("\t s - seconds between Sia API calls and hash rate updates\n");
-			printf("\t default: %f\n", seconds_per_iter);
-			printf("\n");
-			printf("\t d - device: the device id of the card you want to use");
-			printf("\n");
-			exit(0);
-			break;
-		case 'c':
-			cycles_per_iter = strtoul(optarg, &tmp, 10);
-			if(cycles_per_iter < 1 || cycles_per_iter > 1000)
-			{
-				printf("Cycles must be at least 1 and no more than 1000\n");
-				exit(1);
-			}
-			break;
-		case 's':
-			seconds_per_iter = strtod(optarg, &tmp);
-			break;
-		case 'p':
-			port_number = _strdup(optarg);
-			break;
-		case 'd':
-			deviceid = strtoul(optarg, &tmp, 10);
-			break;
+			case 'h':
+				printf("\nUsage:\n\n");
+				printf("\t c - cycles: number of hashing loops between API calls\n");
+				printf("\t default: %d\n", cycles_per_iter);
+				printf("\t\tIncrease this if your computer is freezing or locking up\n");
+				printf("\n");
+				printf("\t s - seconds between Sia API calls and hash rate updates\n");
+				printf("\t default: %f\n", seconds_per_iter);
+				printf("\n");
+				printf("\t d - device: the device id of the card you want to use");
+				printf("\n");
+				exit(0);
+				break;
+			case 'c':
+				cycles_per_iter = strtoul(optarg, &tmp, 10);
+				if(cycles_per_iter < 1 || cycles_per_iter > 1000)
+				{
+					printf("Cycles must be at least 1 and no more than 1000\n");
+					exit(1);
+				}
+				break;
+			case 's':
+				seconds_per_iter = strtod(optarg, &tmp);
+				break;
+			case 'p':
+				port_number = _strdup(optarg);
+				break;
+			case 'd':
+				deviceid = strtoul(optarg, &tmp, 10);
+				break;
 		}
 	}
 
@@ -333,7 +333,7 @@ int main(int argc, char *argv[])
 	{
 		printf("failed to create nonceOutmobj buffer: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
-	ret = cudaMalloc(&vpre, 16*8);
+	ret = cudaMalloc(&vpre, 16 * 8);
 	if(ret != cudaSuccess)
 	{
 		printf("failed to create vpre buffer: %s\n", cudaGetErrorString(ret)); exit(1);
@@ -344,7 +344,7 @@ int main(int argc, char *argv[])
 
 	grindNonces(items_per_iter, 1);
 
-	endTime=chrono::system_clock::now();
+	endTime = chrono::system_clock::now();
 	double elapsedTime = chrono::duration_cast<chrono::microseconds>(endTime - startTime).count() / 1000000.0;
 	items_per_iter *= (seconds_per_iter / elapsedTime) / cycles_per_iter;
 
