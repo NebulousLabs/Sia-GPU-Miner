@@ -63,9 +63,9 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const
 	for(i = 0; i < npt; i++)
 	{
 		((uint32_t*)header)[8] = id + i;
-		v[2] = 0x3c6ef372fe94f82bu + 0x1f83d9abfb41bd6bu + header[4]; v[14] = rotr64(~0x1f83d9abfb41bd6bu ^ v[2], 32); v[10] = 0x3c6ef372fe94f82bu + v[14]; v[6] = rotr64(0x1f83d9abfb41bd6bu ^ v[10], 24);
+		v[2] = 0x5BF2CD1EF9D6B596u + header[4]; v[14] = rotr64(~0x1f83d9abfb41bd6bu ^ v[2], 32); v[10] = 0x3c6ef372fe94f82bu + v[14]; v[6] = rotr64(0x1f83d9abfb41bd6bu ^ v[10], 24);
 		v[2] = v[2] + v[6] + header[5]; v[14] = rotr64(v[14] ^ v[2], 16); v[10] = v[10] + v[14]; v[6] = rotr64(v[6] ^ v[10], 63);
-		v[3] = 0xa54ff53a5f1d36f1u + 0x5be0cd19137e2179u + header[6]; v[15] = rotr64(0x5be0cd19137e2179u ^ v[3], 32); v[11] = 0xa54ff53a5f1d36f1u + v[15]; v[7] = rotr64(0x5be0cd19137e2179u ^ v[11], 24);
+		v[3] = 0x130C253729B586Au + header[6]; v[15] = rotr64(0x5be0cd19137e2179u ^ v[3], 32); v[11] = 0xa54ff53a5f1d36f1u + v[15]; v[7] = rotr64(0x5be0cd19137e2179u ^ v[11], 24);
 		v[3] = v[3] + v[7] + header[7]; v[15] = rotr64(v[15] ^ v[3], 16); v[11] = v[11] + v[15]; v[7] = rotr64(v[7] ^ v[11], 63);
 		v[0] = v1[0] + v1[5] + header[8]; v[15] = rotr64(v[15] ^ v[0], 32); v[10] = v[10] + v[15]; v[5] = rotr64(v1[5] ^ v[10], 24);
 		v[0] = v[0] + v[5] + header[9]; v[15] = rotr64(v[15] ^ v[0], 16); v[10] = v[10] + v[15]; v[5] = rotr64(v[5] ^ v[10], 63);
