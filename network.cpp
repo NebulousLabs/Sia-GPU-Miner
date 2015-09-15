@@ -31,9 +31,8 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
 	return new_len;
 }
 
-void network_init(const char *port)
+void network_init(const char *domain, const char *port)
 {
-	char *domain = (char*)"localhost";
 	curl = curl_easy_init();
 	if(curl == NULL)
 	{

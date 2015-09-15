@@ -203,6 +203,7 @@ int main(int argc, char *argv[])
 	char *tmp;
 	unsigned int deviceid = 0;
 	cudaDeviceProp deviceProp;
+	char *serverip = "localhost";
 	char *port_number = (char*)"9980";
 	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
@@ -227,20 +228,27 @@ int main(int argc, char *argv[])
 #endif
 	printf("Using Nvidia CUDA Toolkit %d.%d\n", CUDART_VERSION / 1000, (CUDART_VERSION % 1000) / 10);
 
-	while((c = getopt(argc, argv, "hc:s:p:d:")) != -1)
+	while((c = getopt(argc, argv, "hc:s:p:d:u:")) != -1)
 	{
 		switch(c)
 		{
 			case 'h':
 				printf("\nUsage:\n\n");
 				printf("\t c - cycles: number of hashing loops between API calls\n");
-				printf("\t default: %d\n", cycles_per_iter);
-				printf("\t\tIncrease this if your computer is freezing or locking up\n");
+				printf("\t     default: %d\n", cycles_per_iter);
+				printf("\t     Increase this if your computer is freezing or locking up\n");
 				printf("\n");
 				printf("\t s - seconds between Sia API calls and hash rate updates\n");
-				printf("\t default: %f\n", seconds_per_iter);
+				printf("\t     default: %f\n", seconds_per_iter);
 				printf("\n");
-				printf("\t d - device: the device id of the card you want to use");
+				printf("\t d - device: the device id of the card you want to use\n");
+				printf("\t     default: 0\n");
+				printf("\n");
+				printf("\t u - port: change the ip address / domain name that the miner is trying to connect to\n");
+				printf("\t     default: %s\n", serverip);
+				printf("\n");
+				printf("\t p - port: change the port that the miner is trying to connect to\n");
+				printf("\t     default: %s\n", port_number);
 				printf("\n");
 				exit(0);
 				break;
@@ -255,6 +263,9 @@ int main(int argc, char *argv[])
 			case 's':
 				seconds_per_iter = strtod(optarg, &tmp);
 				break;
+			case 'u':
+				serverip = _strdup(optarg);
+				break;
 			case 'p':
 				port_number = _strdup(optarg);
 				break;
@@ -265,7 +276,7 @@ int main(int argc, char *argv[])
 	}
 
 	// Set siad URL
-	network_init(port_number);
+	network_init(serverip, port_number);
 
 	printf("\nInitializing...\n");
 
