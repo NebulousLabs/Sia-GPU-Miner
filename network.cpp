@@ -33,13 +33,22 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
 
 void network_init(const char *domain, const char *port)
 {
+	CURLcode res;
+
 	curl = curl_easy_init();
 	if(curl == NULL)
 	{
 		printf("\nError: can't init curl\n");
 		exit(EXIT_FAILURE);
 	}
-	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerrorbuffer);
+	res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerrorbuffer);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "%s\n", curl_easy_strerror(res));
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
+
 	if(bfw_url == NULL || submit_url == NULL)
 	{
 		printf("\nmalloc error\n");
@@ -47,8 +56,20 @@ void network_init(const char *domain, const char *port)
 	}
 	sprintf(bfw_url, "http://%s:%s/miner/headerforwork", domain, port);
 	sprintf(submit_url, "http://%s:%s/miner/submitheader", domain, port);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+	res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
+	res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
 }
 
 void network_cleanup(void)
@@ -92,8 +113,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header)
 	res = curl_easy_setopt(curl, CURLOPT_URL, bfw_url);
 	if(res != CURLE_OK)
 	{
-		fprintf(stderr, "URL error: %s\n", curl_easy_strerror(res));
-		free(in.bytes);
+		fprintf(stderr, "%s\n", curlerrorbuffer);
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
@@ -101,8 +121,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header)
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK)
 	{
-		fprintf(stderr, "Failed to get work, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		fprintf(stderr, "Are you sure that siad is running?\n");
+		fprintf(stderr, "%s\n", curlerrorbuffer);
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
@@ -140,21 +159,26 @@ bool submit_header(uint8_t *header)
 	res = curl_easy_setopt(curl, CURLOPT_URL, submit_url);
 	if(res != CURLE_OK)
 	{
-		fprintf(stderr, "URL error: %s\n", curl_easy_strerror(res));
-		free(in.bytes);
+		fprintf(stderr, "%s\n", curlerrorbuffer);
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
 	curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, 80);
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
+	res = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
 
 	res = curl_easy_perform(curl);
 	if(res != CURLE_OK)
 	{
-		fprintf(stderr, "Failed to submit header, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-		free(in.bytes);
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		fprintf(stderr, "failed to submit header\n");
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
