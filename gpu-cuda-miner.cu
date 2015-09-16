@@ -46,23 +46,22 @@ uint64_t rotr64(const uint64_t x, const int offset)
 }
 #endif
 
-#define blocksize 256
-#define npt 64
+#define blocksize 128
+#define npt 256
 
 __global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const __restrict__ headerIn, uint64_t *const __restrict__ hashOut, uint64_t *const __restrict__ nonceOut, const uint64_t *const __restrict__ v1)
 {
 	uint64_t header[10], h[4], v[16];
-	int i;
 
 	const uint32_t id = (blockDim.x * blockIdx.x + threadIdx.x)*npt;
 
 #pragma unroll
-	for(i = 0; i < 10; i++)
+	for(int i = 0; i < 10; i++)
 		header[i] = headerIn[i];
 
-	for(i = 0; i < npt; i++)
+	for(int n = id; n < id + npt; n++)
 	{
-		((uint32_t*)header)[8] = id + i;
+		((uint32_t*)header)[8] = n;
 		v[2] = 0x5BF2CD1EF9D6B596u + header[4]; v[14] = rotr64(~0x1f83d9abfb41bd6bu ^ v[2], 32); v[10] = 0x3c6ef372fe94f82bu + v[14]; v[6] = rotr64(0x1f83d9abfb41bd6bu ^ v[10], 24);
 		v[2] = v[2] + v[6] + header[5]; v[14] = rotr64(v[14] ^ v[2], 16); v[10] = v[10] + v[14]; v[6] = rotr64(v[6] ^ v[10], 63);
 		v[3] = 0x130C253729B586Au + header[6]; v[15] = rotr64(0x5be0cd19137e2179u ^ v[3], 32); v[11] = 0xa54ff53a5f1d36f1u + v[15]; v[7] = rotr64(0x5be0cd19137e2179u ^ v[11], 24);
@@ -256,23 +255,22 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const
 		v[3] = v[3] + v[7] + header[6]; v[15] = rotr64(v[15] ^ v[3], 16); v[11] = v[11] + v[15]; v[7] = rotr64(v[7] ^ v[11], 63);
 		v[0] = v[0] + v[5] + header[1]; v[15] = rotr64(v[15] ^ v[0], 32); v[10] = v[10] + v[15]; v[5] = rotr64(v[5] ^ v[10], 24);
 		v[0] = v[0] + v[5];             v[15] = rotr64(v[15] ^ v[0], 16); v[10] = v[10] + v[15];
-		v[1] = v[1] + v[6] + header[0]; v[12] = rotr64(v[12] ^ v[1], 32); v[11] = v[11] + v[12]; v[6] = rotr64(v[6] ^ v[11], 24);
-		v[1] = v[1] + v[6] + header[2]; v[12] = rotr64(v[12] ^ v[1], 16); v[11] = v[11] + v[12];
 		v[2] = v[2] + v[7];             v[13] = rotr64(v[13] ^ v[2], 32); v[8] = v[8] + v[13]; v[7] = rotr64(v[7] ^ v[8], 24);
 		v[2] = v[2] + v[7] + header[7]; v[13] = rotr64(v[13] ^ v[2], 16); v[8] = v[8] + v[13];
-		v[3] = v[3] + v[4] + header[5]; v[14] = rotr64(v[14] ^ v[3], 32); v[9] = v[9] + v[14]; v[4] = rotr64(v[4] ^ v[9], 24);
-		v[3] = v[3] + v[4] + header[3]; v[14] = rotr64(v[14] ^ v[3], 16); v[9] = v[9] + v[14];
 
 		h[0] = 0x6A09E667F2BDC928 ^ v[0] ^ v[8];
-		h[1] = 0xbb67ae8584caa73b ^ v[1] ^ v[9];
-		h[2] = 0x3c6ef372fe94f82b ^ v[2] ^ v[10];
-		h[3] = 0xa54ff53a5f1d36f1 ^ v[3] ^ v[11];
 		if(*((uint32_t*)h) == 0)
 		{
 			*nonceOut = header[4];
-#pragma unroll
-			for(i = 0; i < 4; i++)
-				hashOut[i] = h[i];
+			
+			hashOut[0] = h[0];
+			v[1] = v[1] + v[6] + header[0]; v[12] = rotr64(v[12] ^ v[1], 32); v[11] = v[11] + v[12]; v[6] = rotr64(v[6] ^ v[11], 24);
+			v[1] = v[1] + v[6] + header[2]; v[12] = rotr64(v[12] ^ v[1], 16); v[11] = v[11] + v[12];
+			v[3] = v[3] + v[4] + header[5]; v[14] = rotr64(v[14] ^ v[3], 32); v[9] = v[9] + v[14]; v[4] = rotr64(v[4] ^ v[9], 24);
+			v[3] = v[3] + v[4] + header[3]; v[14] = rotr64(v[14] ^ v[3], 16); v[9] = v[9] + v[14];
+			hashOut[1] = 0xbb67ae8584caa73b ^ v[1] ^ v[9];
+			hashOut[2] = 0x3c6ef372fe94f82b ^ v[2] ^ v[10];
+			hashOut[3] = 0xa54ff53a5f1d36f1 ^ v[3] ^ v[11];
 			return;
 		}
 	}
