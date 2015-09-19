@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
 	unsigned int cycles_per_iter = 15;
 	double seconds_per_iter = 10.0;
 
-	printf("\nSia-CUDA-Miner 1.06\n");
+	printf("\nSia-CUDA-Miner 2.00\n");
 #ifdef _MSC_VER
 	printf("Compiled with Visual C++ %d\n", _MSC_VER / 100);
 #else
