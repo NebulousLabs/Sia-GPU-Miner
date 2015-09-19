@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
 	char *tmp;
 	unsigned int deviceid = 0;
 	cudaDeviceProp deviceProp;
-	char *serverip = "localhost";
+	char *serverip = (char *)"localhost";
 	char *port_number = (char*)"9980";
 	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
 	printf("Compiled with Clang %s\n", __clang_version__);
 #else
 #ifdef __GNUC__
-	printf("Compiled with GCC %d.&d\n", __GNUC__, __GNUC_MINOR__);
+	printf("Compiled with GCC %d.%d\n", __GNUC__, __GNUC_MINOR__);
 #else
 	printf("Compiled with an unusual compiler\n");
 #endif

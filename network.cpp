@@ -131,7 +131,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header)
 	}
 	if(in.len != 112)
 	{
-		fprintf(stderr, "\ncurl did not receive correct bytes (got %d, expected 112)\n", in.len);
+		fprintf(stderr, "\ncurl did not receive correct bytes (got %Iu, expected 112)\n", in.len);
 		free(in.bytes);
 		return 1;
 	}
