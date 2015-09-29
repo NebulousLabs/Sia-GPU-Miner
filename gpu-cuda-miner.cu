@@ -252,25 +252,27 @@ __global__ void __launch_bounds__(blocksize, 4) nonceGrind(const uint64_t *const
 		v[2] = v[2] + v[6] + header[9]; v[14] = rotr64(v[14] ^ v[2], 32); v[10] = v[10] + v[14]; v[6] = rotr64(v[6] ^ v[10], 24);
 		v[2] = v[2] + v[6];             v[14] = rotr64(v[14] ^ v[2], 16); v[10] = v[10] + v[14]; v[6] = rotr64(v[6] ^ v[10], 63);
 		v[3] = v[3] + v[7];             v[15] = rotr64(v[15] ^ v[3], 32); v[11] = v[11] + v[15]; v[7] = rotr64(v[7] ^ v[11], 24);
-		v[3] = v[3] + v[7] + header[6]; v[15] = rotr64(v[15] ^ v[3], 16); v[11] = v[11] + v[15]; v[7] = rotr64(v[7] ^ v[11], 63);
-		v[0] = v[0] + v[5] + header[1]; v[15] = rotr64(v[15] ^ v[0], 32); v[10] = v[10] + v[15]; v[5] = rotr64(v[5] ^ v[10], 24);
-		v[0] = v[0] + v[5];             v[15] = rotr64(v[15] ^ v[0], 16); v[10] = v[10] + v[15];
-		v[2] = v[2] + v[7];             v[13] = rotr64(v[13] ^ v[2], 32); v[8] = v[8] + v[13]; v[7] = rotr64(v[7] ^ v[8], 24);
-		v[2] = v[2] + v[7] + header[7]; v[13] = rotr64(v[13] ^ v[2], 16); v[8] = v[8] + v[13];
+		v[3] = v[3] + v[7] + header[6];	v[15] = rotr64(v[15] ^ v[3], 16); v[11] = v[11] + v[15]; v[7] = rotr64(v[7] ^ v[11], 63);
+		v[0] = v[0] + v[5] + header[1];	v[15] = rotr64(v[15] ^ v[0], 32); v[10] = v[10] + v[15];
+		v[0] = v[0] + rotr64(v[5] ^ v[10], 24);
+		v[2] = v[2] + v[7];
+		v[13] = rotr64(v[13] ^ v[2], 32);
+		v[8] = v[8] + v[13];
+		v[2] = v[2] + rotr64(v[7] ^ v[8], 24) + header[7];
 
-		h[0] = 0x6A09E667F2BDC928 ^ v[0] ^ v[8];
+		h[0] = 0x6A09E667F2BDC928 ^ v[0] ^ (v[8] + rotr64(v[13] ^ v[2], 16));
 		if(*((uint32_t*)h) == 0)
 		{
 			*nonceOut = header[4];
 			
 			hashOut[0] = h[0];
-			v[1] = v[1] + v[6] + header[0]; v[12] = rotr64(v[12] ^ v[1], 32); v[11] = v[11] + v[12]; v[6] = rotr64(v[6] ^ v[11], 24);
-			v[1] = v[1] + v[6] + header[2]; v[12] = rotr64(v[12] ^ v[1], 16); v[11] = v[11] + v[12];
-			v[3] = v[3] + v[4] + header[5]; v[14] = rotr64(v[14] ^ v[3], 32); v[9] = v[9] + v[14]; v[4] = rotr64(v[4] ^ v[9], 24);
-			v[3] = v[3] + v[4] + header[3]; v[14] = rotr64(v[14] ^ v[3], 16); v[9] = v[9] + v[14];
-			hashOut[1] = 0xbb67ae8584caa73b ^ v[1] ^ v[9];
-			hashOut[2] = 0x3c6ef372fe94f82b ^ v[2] ^ v[10];
-			hashOut[3] = 0xa54ff53a5f1d36f1 ^ v[3] ^ v[11];
+			v[1] = v[1] + v[6] + header[0]; v[12] = rotr64(v[12] ^ v[1], 32); v[11] = v[11] + v[12];
+			v[1] = v[1] + rotr64(v[6] ^ v[11], 24) + header[2];
+			v[3] = v[3] + v[4] + header[5]; v[14] = rotr64(v[14] ^ v[3], 32); v[9] = v[9] + v[14];
+			v[3] = v[3] + rotr64(v[4] ^ v[9], 24) + header[3];
+			hashOut[1] = 0xbb67ae8584caa73b ^ v[1] ^ (v[9] + rotr64(v[14] ^ v[3], 16));
+			hashOut[2] = 0x3c6ef372fe94f82b ^ v[2] ^ (v[10] + rotr64(v[15] ^ v[0], 16));
+			hashOut[3] = 0xa54ff53a5f1d36f1 ^ v[3] ^ (v[11] + rotr64(v[12] ^ v[1], 16));
 			return;
 		}
 	}
