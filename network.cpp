@@ -31,7 +31,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct inData *in)
 	return new_len;
 }
 
-void network_init(const char *domain, const char *port)
+void network_init(const char *domain, const char *port, const char *useragent)
 {
 	CURLcode res;
 
@@ -41,6 +41,16 @@ void network_init(const char *domain, const char *port)
 		printf("\nError: can't init curl\n");
 		exit(EXIT_FAILURE);
 	}
+	/* when we want to debug stuff
+	res = curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+	if(res != CURLE_OK)
+	{
+		printf("verbose res=%d\n", res);
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
+	*/
 	res = curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlerrorbuffer);
 	if(res != CURLE_OK)
 	{
@@ -56,6 +66,7 @@ void network_init(const char *domain, const char *port)
 	}
 	sprintf(bfw_url, "http://%s:%s/miner/headerforwork", domain, port);
 	sprintf(submit_url, "http://%s:%s/miner/submitheader", domain, port);
+
 	res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 	if(res != CURLE_OK)
 	{
@@ -63,7 +74,16 @@ void network_init(const char *domain, const char *port)
 		curl_easy_cleanup(curl);
 		exit(1);
 	}
+
 	res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &in);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
+
+	res = curl_easy_setopt(curl, CURLOPT_USERAGENT, useragent);
 	if(res != CURLE_OK)
 	{
 		fprintf(stderr, "%s\n", curlerrorbuffer);

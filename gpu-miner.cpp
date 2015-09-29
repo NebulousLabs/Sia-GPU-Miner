@@ -16,6 +16,7 @@ using namespace std;
 #endif
 
 #include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
 #include "network.h"
 
 uint64_t *blockHeadermobj = nullptr;
@@ -205,6 +206,7 @@ int main(int argc, char *argv[])
 	cudaDeviceProp deviceProp;
 	char *serverip = (char *)"localhost";
 	char *port_number = (char*)"9980";
+	char *useragent = (char*)"Sia-Miner";
 	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
 
@@ -276,7 +278,7 @@ int main(int argc, char *argv[])
 	}
 
 	// Set siad URL
-	network_init(serverip, port_number);
+	network_init(serverip, port_number, useragent);
 
 	printf("\nInitializing...\n");
 
@@ -386,6 +388,7 @@ int main(int argc, char *argv[])
 	{
 		printf("CUDA error: %s\n", cudaGetErrorString(ret)); exit(1);
 	}
+	cudaProfilerStop();
 	cudaDeviceReset();
 
 	network_cleanup();
