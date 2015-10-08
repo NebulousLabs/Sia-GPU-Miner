@@ -79,6 +79,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 
 	// Get data from siad
 	curl_easy_reset(curl);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Sia-Agent");
 	curl_easy_setopt(curl, CURLOPT_URL, bfw_url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &inBuf);
