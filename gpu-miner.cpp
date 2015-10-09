@@ -236,21 +236,21 @@ int main(int argc, char *argv[])
 		{
 			case 'h':
 				printf("\nUsage:\n\n");
-				printf("\t c - cycles: number of hashing loops between API calls\n");
-				printf("\t     default: %d\n", cycles_per_iter);
-				printf("\t     Increase this if your computer is freezing or locking up\n");
+				printf("  -c <cycles>  : number of hashing loops between API calls\n");
+				printf("                 default: %d\n", cycles_per_iter);
+				printf("                 Increase this if your computer is freezing or locking up\n");
 				printf("\n");
-				printf("\t s - seconds between Sia API calls and hash rate updates\n");
-				printf("\t     default: %f\n", seconds_per_iter);
+				printf("  -s <seconds> : seconds between Sia API calls and hash rate updates\n");
+				printf("                 default: %f\n", seconds_per_iter);
 				printf("\n");
-				printf("\t d - device: the device id of the card you want to use\n");
-				printf("\t     default: 0\n");
+				printf("  -d <device>  : the device id of the card you want to use\n");
+				printf("                 default: 0\n");
 				printf("\n");
-				printf("\t u - port: change the ip address / domain name that the miner is trying to connect to\n");
-				printf("\t     default: %s\n", serverip);
+				printf("  -u <address> : change the ip address / domain name that the miner is trying to connect to\n");
+				printf("                 default: %s\n", serverip);
 				printf("\n");
-				printf("\t p - port: change the port that the miner is trying to connect to\n");
-				printf("\t     default: %s\n", port_number);
+				printf("  -p <port>    : change the port that the miner is trying to connect to\n");
+				printf("                 default: %s\n", port_number);
 				printf("\n");
 				exit(0);
 				break;
