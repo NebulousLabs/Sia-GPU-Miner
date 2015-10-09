@@ -205,8 +205,8 @@ int main(int argc, char *argv[])
 	unsigned int deviceid = 0;
 	cudaDeviceProp deviceProp;
 	char *serverip = (char *)"localhost";
-	char *port_number = (char*)"9980";
-	char *useragent = (char*)"Sia-Miner";
+	char *port_number = (char *)"9980";
+	char *useragent = (char *)"Sia-Agent";
 	double hash_rate;
 	uint32_t items_per_iter = 256 * 256 * 256 * 16;
 
