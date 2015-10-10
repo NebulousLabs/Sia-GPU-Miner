@@ -66,7 +66,15 @@ void network_init(const char *domain, const char *port, const char *useragent)
 	}
 	sprintf(bfw_url, "http://%s:%s/miner/headerforwork", domain, port);
 	sprintf(submit_url, "http://%s:%s/miner/submitheader", domain, port);
-
+	/*
+	res = curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
+	if(res != CURLE_OK)
+	{
+		fprintf(stderr, "%s\n", curlerrorbuffer);
+		curl_easy_cleanup(curl);
+		exit(1);
+	}
+	*/
 	res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 	if(res != CURLE_OK)
 	{
@@ -106,6 +114,11 @@ int check_http_response(CURL *curl)
 		if(http_code != 200 && http_code != 0)
 		{
 			fprintf(stderr, "\nHTTP error %lu", http_code);
+			if(http_code == 400)
+			{
+				fprintf(stderr, "\nplease unlock the wallet");
+				Sleep(10000);
+			}
 			if(in.len > 0)
 			{
 				in.bytes = (uint8_t*)realloc(in.bytes, in.len + 1);
@@ -209,8 +222,16 @@ bool submit_header(uint8_t *header)
 	}
 	else
 	{
+		if(in.len > 0)
+		{
+			if(strstr((char*)in.bytes, "\"Success\":true") == NULL)
+			{
+				fprintf(stderr, (char*)in.bytes);
+				free(in.bytes);
+				return false;
+			}
+		}
 		free(in.bytes);
 		return true;
 	}
 }
-
