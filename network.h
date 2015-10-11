@@ -1,6 +1,11 @@
 #include <cstdint>
 #include <curl/curl.h>
 
+#ifndef WIN32
+#include <unistd.h>
+#define Sleep(duration) usleep((duration)*1000)
+#endif
+
 struct inData
 {
 	uint8_t *bytes;
