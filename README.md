@@ -16,7 +16,7 @@ You can tweak the miner settings with five command-line arguments: `-I`, `-C`, `
 * -I controls the intensity. On each GPU call, the GPU will do 2^I hashes. The
   default value is low to prevent certain GPUs from crashing immediately at
   startup. Most cards will benefit substantially from increasing the value. The
-  default is 16, but reccommended (for most cards) is 20-25.
+  default is 20, but recommended (for most cards) is 20-28.
 * -C controls how frequently calls to siad are made. Reducing it substantially
   could cause instability to the miner. Increasing it will reduce the frequency
   at which the hashrate is updated. If a low 'I' is being used, a high 'C'
