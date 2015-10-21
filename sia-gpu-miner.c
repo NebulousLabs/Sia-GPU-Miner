@@ -33,7 +33,7 @@
 // Max of 2^32 so that people can't send an hour of work to the GPU at one time
 #define MIN_INTENSITY		8
 #define MAX_INTENSITY		32
-#define DEFAULT_INTENSITY	16
+#define DEFAULT_INTENSITY	20
 
 // Number of times the GPU kernel is called between updating the command line text
 #define MIN_CPI 		1     // Must do one call per update

@@ -31,6 +31,9 @@ int check_http_response(CURL *curl) {
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	if (http_code != 200) {
 		fprintf(stderr, "HTTP error %lu\n", http_code);
+		if (http_code == 400){
+			fprintf(stderr, "\tMake sure you unlock your wallet before running the miner!\n");
+		}
 		return 1;
 	}
 	return 0;
