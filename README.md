@@ -2,14 +2,14 @@
 A GPU miner designed for mining siacoins. This miner runs in a command prompt
 and prints your hashrate along side the number of blocks you've mined. Most
 cards will see greatly increased hashrates by increasing the value of 'I'
-(default is 16, optimal is typically 20-25).
+(default is 20, optimal is typically 20-28).
 
 ## How to Use
-1) Build the miner by running `make`.
+1) Download the latest build from: https://github.com/droghio/Sia-GPU-Miner/releases
 
-2) Make sure you have a recent version of Sia installed and running.
+2) Make sure you have a recent version of Sia installed and running. Don't forget to unlock your wallet.
 
-3) Run the miner by running `./gpu-miner`. It will mine blocks until killed with Ctrl-C.
+3) Run the miner by double clicking the `gpu-miner.exe`. It will mine blocks until killed with Ctrl-C.
 
 ## Configuration
 You can tweak the miner settings with five command-line arguments: `-I`, `-C`, `-p`, `-d`, and `-P`.
@@ -30,7 +30,7 @@ You can tweak the miner settings with five command-line arguments: `-I`, `-C`, `
   configured Sia to be on a port other than the default. Default is 9980.
 
 If you wanted to run the program on platform 0, device 1, with an intensity of
-24, you would call `./sia-gpu-miner -d 1 -I 24`
+24, you would call `sia-gpu-miner -d 1 -I 24`
 
 ## Multiple GPUs
 Each instance of the miner can only point to a single GPU. To mine on multiple
@@ -44,8 +44,7 @@ updating one time per [numGPUs] seconds. You should not mine with more than 6
 cards at a time (per instance of siad).
 
 ## Notes
-*    Each Sia block takes about 10 minutes to mine.
+*    Each Sia block takes about a week or so to mine.
 *    Once a block is mined, Sia waits for 144 confirmation blocks before the
 	 reward is added to your wallet, which takes about 24 hours.
 *    Sia currently doesn't have any mining pools.
-*    Windows is poorly supported. For best results, use Linux when mining.
