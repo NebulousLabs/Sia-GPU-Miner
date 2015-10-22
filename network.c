@@ -29,7 +29,10 @@ CURL *curl;
 int check_http_response(CURL *curl) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200) {
+	if (http_code == 400) {
+		fprintf(stderr, "HTTP error %lu - check that the wallet is unlocked\n", http_code);
+		return 1;
+	} else if (http_code != 200) {
 		fprintf(stderr, "HTTP error %lu\n", http_code);
 		if (http_code == 400){
 			fprintf(stderr, "\tMake sure you unlock your wallet before running the miner!\n");
@@ -122,6 +125,7 @@ int submit_header(uint8_t *header) {
 	CURLcode res;
 
 	curl_easy_reset(curl);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Sia-Agent");
 	curl_easy_setopt(curl, CURLOPT_URL, submit_url);
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, 80);
