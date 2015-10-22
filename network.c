@@ -119,6 +119,7 @@ int submit_header(uint8_t *header) {
 	CURLcode res;
 
 	curl_easy_reset(curl);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Sia-Agent");
 	curl_easy_setopt(curl, CURLOPT_URL, submit_url);
 	curl_easy_setopt(curl, CURLOPT_POST, 1);
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, 80);
