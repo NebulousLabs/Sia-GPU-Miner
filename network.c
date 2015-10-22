@@ -29,7 +29,10 @@ CURL *curl;
 int check_http_response(CURL *curl) {
 	long http_code = 0;
 	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-	if (http_code != 200) {
+	if (http_code == 400) {
+		fprintf(stderr, "HTTP error %lu - check that the wallet is unlocked\n", http_code);
+		return 1;
+	} else if (http_code != 200) {
 		fprintf(stderr, "HTTP error %lu\n", http_code);
 		return 1;
 	}
