@@ -42,7 +42,7 @@ function formatSiacoin(hastings) {
 // Called by the UI upon showing
 function start() {
 	// DEVTOOL: uncomment to bring up devtools on plugin view
-	 IPC.sendToHost('devtools');
+	// IPC.sendToHost('devtools');
 	
 	// Call the API
 	update();

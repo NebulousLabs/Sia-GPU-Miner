@@ -11,6 +11,7 @@
 
 const Process = require("child_process").spawn
 const path = require("path")
+const os = require("os")
 
 basedir = window.location.pathname
 
@@ -20,6 +21,34 @@ var blocksmined = 0
 var hashrate = 0
 
 var miner
+var minerfile = ""
+
+var platform = os.platform()
+switch (platform){
+    case "linux":
+        minerfile = "sia-gpu-miner-Linux"
+        break;
+
+    case "darwin":
+        minerfile = "sia-gpu-miner-Mac"
+        break
+
+    case "win32":
+        minerfile = "sia-gpu-miner-Windows.exe"
+        break;
+
+    default:
+        IPC.sendToHost("notify", "Invalid OS detected. Please use Linux, Mac, or Windows with this plugin.", "error")
+        elByID("toggleminer").innerHTML = "Invalid OS"
+        break;
+}
+
+if (os.arch() != "x64"){
+        IPC.sendToHost("notify", "Invalid arch detected. Please use a 64bit processor.", "error")
+        elByID("toggleminer").innerHTML = "Invalid Arch"
+        minerfile = ""
+}
+
 
 function minerMessage(text){
     //elByID("mineroutput").innerHTML = text + elByID("mineroutput").innerHTML
@@ -57,6 +86,11 @@ function minerUpdateStatus(){
 
 
 elByID("toggleminer").onclick = function (){
+    if (!minerfile){
+        IPC.sendToHost("notify", "Invalid OS detected. Please use 64 bit Linux, Mac, or Windows with this plugin.", "error")
+        return
+    }
+
     if (minerstatus == "idle"){
         if (elByID("lock").innerHTML != "Unlocked"){
             IPC.sendToHost("notify", "Please unlock your wallet before starting the miner.", "error")
@@ -72,7 +106,7 @@ elByID("toggleminer").onclick = function (){
         }
 
         miner = Process(
-            path.resolve(basedir, "../assets/sia-gpu-miner"),
+            path.resolve(basedir, "../assets/"+minerfile),
                 [ "-I", intensity],{ 
                 stdio: [ "ignore", "pipe", "pipe" ],
                 cwd: path.resolve(basedir, "../assets")
