@@ -35,6 +35,8 @@ switch (platform){
 
     case "win32":
         minerfile = "sia-gpu-miner-Windows.exe"
+        //Remove nonsense leading slash for Windows.
+        basedir = basedir.slice(1)
         break;
 
     default:
