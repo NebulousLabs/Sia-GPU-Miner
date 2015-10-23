@@ -27,34 +27,51 @@ function minerUpdateStatus(){
     //Update status text.
     elByID("minerstatus").innerHTML = 
         (minerstatus == "idle" ? "Miner is Idle" : "Miner is Mining")
-
     
+    elByID("toggleminer").innerHTML = 
+        (minerstatus == "idle" ? "Start GPU Miner!" : "Stop GPU Miner!")
+
     elByID("gpublocks").innerHTML = "GPU Blocks Mined: " + blocksmined
     elByID("hashrate").innerHTML = "Hash Rate: " + hashrate
 }
+
+
 
 elByID("toggleminer").onclick = function (){
     if (minerstatus == "idle"){
         //Launch the miner!
         miner = Process(
-        path.resolve(basedir, "../assets/sia-gpu-miner"),{ 
-            stdio: [ "ignore", "pipe", "pipe" ],
-            cwd: path.resolve(basedir, "../assets")
+            path.resolve(basedir, "../assets/sia-gpu-miner"),{ 
+                stdio: [ "ignore", "pipe", "pipe" ],
+                cwd: path.resolve(basedir, "../assets")
         })
+
+        minerstatus = "active"
 
 
         miner.stdout.on('data', function (data) {
             console.log('stdout: ' + data);
             minerMessage(data)
             
+            values = String(data).replace("\t", " ").split(" ")
+            
+            //If we got an update form the miner.
+            //You might be asking what is with all the trims.
+                //My answer would be what is with all the nulls.
+            if (values[0].trim() == "Mining" && values.length == 7){
+                hashrate = values[2].trim()
+                blocksmined = values[4].trim()
+                minerUpdateStatus()
+            }
         });
         
         miner.stderr.on('data', function (data) {
             console.log('stderr: ' + data);
             minerMessage(data)
+            //minerUpateStatus()
         });
         
-        miner.on('close', function (code) {
+        miner.on('exit', function (code) {
             console.log("Miner closed.");
             minerstatus = idle
             miner = undefined
@@ -62,4 +79,10 @@ elByID("toggleminer").onclick = function (){
             minerUpdateStatus()
         });
     }
+
+    else {
+        minerMessage("Sent kill message to miner.")
+        miner.kill()
+    }
+
 }
