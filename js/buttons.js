@@ -45,8 +45,8 @@ elByID("toggleminer").onclick = function (){
                 stdio: [ "ignore", "pipe", "pipe" ],
                 cwd: path.resolve(basedir, "../assets")
         })
-
         minerstatus = "active"
+        IPC.sendToHost('notify', "The GPU miner has started!", "start");
 
 
         miner.stdout.on('data', function (data) {
@@ -72,9 +72,11 @@ elByID("toggleminer").onclick = function (){
         });
         
         miner.on('exit', function (code) {
+            IPC.sendToHost('notify', "The GPU miner has stopped.", "stop");
             console.log("Miner closed.");
-            minerstatus = idle
+            minerstatus = "idle"
             miner = undefined
+            hashrate = 0
             minerMessage("Miner stopped.")
             minerUpdateStatus()
         });
