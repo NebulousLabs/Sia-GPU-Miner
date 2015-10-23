@@ -1,6 +1,6 @@
 README
 
-Miner v1.0.7
+Miner v1.0.5-ui
 October 23, 2015
 ===============
 
