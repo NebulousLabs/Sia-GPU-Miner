@@ -39,14 +39,24 @@ function minerUpdateStatus(){
 
 elByID("toggleminer").onclick = function (){
     if (minerstatus == "idle"){
+
         //Launch the miner!
+        intensity = Number(elByID("intensity").value)
+        if (intensity < 16 || intensity > 32){
+            IPC.sendToHost("notify", "The Intensity Value must be between 16 and 32.", "error")
+            return
+        }
+
         miner = Process(
-            path.resolve(basedir, "../assets/sia-gpu-miner"),{ 
+            path.resolve(basedir, "../assets/sia-gpu-miner"),
+                [ "-I", intensity],{ 
                 stdio: [ "ignore", "pipe", "pipe" ],
                 cwd: path.resolve(basedir, "../assets")
         })
         minerstatus = "active"
-        IPC.sendToHost('notify', "The GPU miner has started!", "start");
+        IPC.sendToHost('notify',
+            "The GPU miner has started with intensity " + intensity  + "!",
+        "start");
 
 
         miner.stdout.on('data', function (data) {
@@ -86,5 +96,11 @@ elByID("toggleminer").onclick = function (){
         minerMessage("Sent kill message to miner.")
         miner.kill()
     }
-
 }
+
+
+process.on("beforeexit", function (){
+    if (miner){
+        miner.kill()
+    }
+})
