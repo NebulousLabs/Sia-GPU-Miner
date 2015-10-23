@@ -12,6 +12,7 @@
 .frame {
 	color: #f5f5f5;
 }
+
 .welcome {
 	-webkit-animation: fadein 3s;
 	position: relative;
@@ -19,6 +20,8 @@
 	transform: translateY(-35%);
 	text-align: center;
 	color: #c5c5c5;
+	font-size: 48px;
+    vertical-align: middle;
 }
 .welcome .large {
 	font-size: 72px;
@@ -26,4 +29,8 @@
 .welcome .small {
 	margin-top: 20px;
 	font-size: 32px;
+}
+
+#intensity{
+    text-align: left;
 }

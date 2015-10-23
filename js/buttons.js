@@ -98,6 +98,7 @@ elByID("toggleminer").onclick = function (){
         
         miner.stderr.on('data', function (data) {
             console.log('stderr: ' + data);
+            IPC.sendToHost("notify", "GPU Mining Error: " + data, "error")
             minerMessage(data)
             //minerUpateStatus()
         });
