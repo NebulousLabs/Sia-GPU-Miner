@@ -31,20 +31,25 @@ function minerUpdateStatus(){
     switch (minerstatus){
         case "idle":
             elByID("minerstatus").innerHTML = "Miner is Idle"
+            elByID("toggleminer").innerHTML = "Start GPU Miner!"
             elByID("gpublocks").innerHTML = "Blocks Mined: " + blocksmined
             elByID("hashrate").innerHTML = "Hash Rate: " + hashrate + " MHz"
+            elByID("hashratehuge").innerHTML = "Miner is Idle"
             break;
 
         case "loading":
             elByID("minerstatus").innerHTML = "Miner is Loading"
+            elByID("toggleminer").innerHTML = "Miner is Loading"
             elByID("gpublocks").innerHTML = "Loading..."
             elByID("hashrate").innerHTML = "Loading..."
             break
 
         default:
             elByID("minerstatus").innerHTML = "Miner is Mining"
+            elByID("toggleminer").innerHTML = "Stop GPU Miner"
             elByID("gpublocks").innerHTML = "Blocks Mined: " + blocksmined
-            elByID("hashrate").innerHTML = "Hash Rate: " + hashrate
+            elByID("hashrate").innerHTML = "Hash Rate: " + hashrate + " MHz"
+            elByID("hashratehuge").innerHTML = hashrate + " MHz"
             break
     }
 }
