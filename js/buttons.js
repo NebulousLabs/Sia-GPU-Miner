@@ -7,6 +7,8 @@
 // John Drogo 
 //
 
+//What happens on 400/500 errors reported by the miner?
+
 const Process = require("child_process").spawn
 const path = require("path")
 
@@ -20,25 +22,42 @@ var hashrate = 0
 var miner
 
 function minerMessage(text){
-    elByID("mineroutput").innerHTML = text + elByID("mineroutput").innerHTML
+    //elByID("mineroutput").innerHTML = text + elByID("mineroutput").innerHTML
 }
+
 
 function minerUpdateStatus(){
     //Update status text.
-    elByID("minerstatus").innerHTML = 
-        (minerstatus == "idle" ? "Miner is Idle" : "Miner is Mining")
-    
-    elByID("toggleminer").innerHTML = 
-        (minerstatus == "idle" ? "Start GPU Miner!" : "Stop GPU Miner!")
+    switch (minerstatus){
+        case "idle":
+            elByID("minerstatus").innerHTML = "Miner is Idle"
+            elByID("gpublocks").innerHTML = "Blocks Mined: " + blocksmined
+            elByID("hashrate").innerHTML = "Hash Rate: " + hashrate + " MHz"
+            break;
 
-    elByID("gpublocks").innerHTML = "GPU Blocks Mined: " + blocksmined
-    elByID("hashrate").innerHTML = "Hash Rate: " + hashrate
+        case "loading":
+            elByID("minerstatus").innerHTML = "Miner is Loading"
+            elByID("gpublocks").innerHTML = "Loading..."
+            elByID("hashrate").innerHTML = "Loading..."
+            break
+
+        default:
+            elByID("minerstatus").innerHTML = "Miner is Mining"
+            elByID("gpublocks").innerHTML = "Blocks Mined: " + blocksmined
+            elByID("hashrate").innerHTML = "Hash Rate: " + hashrate
+            break
+    }
 }
 
 
 
 elByID("toggleminer").onclick = function (){
     if (minerstatus == "idle"){
+        if (elByID("lock").innerHTML != "Unlocked"){
+            IPC.sendToHost("notify", "Please unlock your wallet before starting the miner.", "error")
+            return
+        }
+
 
         //Launch the miner!
         intensity = Number(elByID("intensity").value)
@@ -53,7 +72,8 @@ elByID("toggleminer").onclick = function (){
                 stdio: [ "ignore", "pipe", "pipe" ],
                 cwd: path.resolve(basedir, "../assets")
         })
-        minerstatus = "active"
+        minerstatus = "loading"
+        minerUpdateStatus()
         IPC.sendToHost('notify',
             "The GPU miner has started with intensity " + intensity  + "!",
         "start");
@@ -62,7 +82,8 @@ elByID("toggleminer").onclick = function (){
         miner.stdout.on('data', function (data) {
             console.log('stdout: ' + data);
             minerMessage(data)
-            
+           
+            minerstatus = "active" 
             values = String(data).replace("\t", " ").split(" ")
             
             //If we got an update form the miner.
