@@ -2,6 +2,9 @@
 A GPU miner plugin designed for mining siacoins. Supports Windows, Mac, and Linux. Unzip this file into your plugin directory for Sia.
 E.g. C:\Users\John\Downloads\Sia-UI-v0.4.6-beta-win64\Sia-UI-v0.4.4-beta-win64\resources\app\plugins
 
+![alt text](https://i.imgur.com/s2YMbRa.png "This is awesome!")
+
+
 ## How to Use
 1) Open Sia-UI
 
