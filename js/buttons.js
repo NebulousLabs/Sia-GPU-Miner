@@ -40,13 +40,13 @@ switch (platform){
         break;
 
     default:
-        IPC.sendToHost("notify", "Invalid OS detected. Please use Linux, Mac, or Windows with this plugin.", "error")
+        IPC.sendToHost("notification", "Invalid OS detected. Please use Linux, Mac, or Windows with this plugin.", "error")
         elByID("toggleminer").innerHTML = "Invalid OS"
         break;
 }
 
 if (os.arch() != "x64"){
-        IPC.sendToHost("notify", "Invalid arch detected. Please use a 64bit processor.", "error")
+        IPC.sendToHost("notification", "Invalid arch detected. Please use a 64bit processor.", "error")
         elByID("toggleminer").innerHTML = "Invalid Arch"
         minerfile = ""
 }
@@ -89,13 +89,13 @@ function minerUpdateStatus(){
 
 elByID("toggleminer").onclick = function (){
     if (!minerfile){
-        IPC.sendToHost("notify", "Invalid OS detected. Please use 64 bit Linux, Mac, or Windows with this plugin.", "error")
+        IPC.sendToHost("notification", "Invalid OS detected. Please use 64 bit Linux, Mac, or Windows with this plugin.", "error")
         return
     }
 
     if (minerstatus == "idle"){
         if (elByID("lock").innerHTML != "Unlocked"){
-            IPC.sendToHost("notify", "Please unlock your wallet before starting the miner.", "error")
+            IPC.sendToHost("notification", "Please unlock your wallet before starting the miner.", "error")
             return
         }
 
@@ -103,7 +103,7 @@ elByID("toggleminer").onclick = function (){
         //Launch the miner!
         intensity = Number(elByID("intensity").value)
         if (intensity < 16 || intensity > 32){
-            IPC.sendToHost("notify", "The Intensity Value must be between 16 and 32.", "error")
+            IPC.sendToHost("notification", "The Intensity Value must be between 16 and 32.", "error")
             return
         }
 
@@ -115,9 +115,9 @@ elByID("toggleminer").onclick = function (){
         })
         minerstatus = "loading"
         minerUpdateStatus()
-        IPC.sendToHost('notify',
+        IPC.sendToHost('notification',
             "The GPU miner has started with intensity " + intensity  + "!",
-        "start");
+        "success");
 
 
         miner.stdout.on('data', function (data) {
@@ -139,13 +139,13 @@ elByID("toggleminer").onclick = function (){
         
         miner.stderr.on('data', function (data) {
             console.log('stderr: ' + data);
-            IPC.sendToHost("notify", "GPU Mining Error: " + data, "error")
+            IPC.sendToHost("notification", "GPU Mining Error: " + data, "error")
             minerMessage(data)
             //minerUpateStatus()
         });
         
         miner.on('exit', function (code) {
-            IPC.sendToHost('notify', "The GPU miner has stopped.", "stop");
+            IPC.sendToHost('notification', "The GPU miner has stopped.", "exit");
             console.log("Miner closed.");
             minerstatus = "idle"
             miner = undefined
