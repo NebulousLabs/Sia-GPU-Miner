@@ -32,7 +32,7 @@ int check_http_response(CURL *curl) {
 	if (http_code == 400) {
 		fprintf(stderr, "HTTP error %lu - check that the wallet is unlocked\n", http_code);
 		return 1;
-	} else if (http_code != 200) {
+	} else if (http_code < 200 || http_code > 299) {
 		fprintf(stderr, "HTTP error %lu\n", http_code);
 		return 1;
 	}
