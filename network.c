@@ -43,8 +43,8 @@ int check_http_response(CURL *curl) {
 void set_host(char *host, char *port) {
 	bfw_url = malloc(21 + strlen(host) + strlen(port));
 	submit_url = malloc(20 + strlen(host) + strlen(port));
-	sprintf(bfw_url, "%s%s/miner/headerforwork", host, port);
-	sprintf(submit_url, "%s%s/miner/submitheader", host, port);
+	sprintf(bfw_url, "%s%s/miner/header", host, port);
+	sprintf(submit_url, "%s%s/miner/header", host, port);
 }
 
 // Write network data to a buffer (inBuf)
