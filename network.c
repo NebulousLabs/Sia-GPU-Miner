@@ -32,7 +32,7 @@ int check_http_response(CURL *curl) {
 	if (http_code == 400) {
 		fprintf(stderr, "HTTP error %lu - check that the wallet is unlocked\n", http_code);
 		return 1;
-	} else if (http_code != 200) {
+	} else if (http_code < 200 || http_code > 299) {
 		fprintf(stderr, "HTTP error %lu\n", http_code);
 		return 1;
 	}
@@ -43,8 +43,8 @@ int check_http_response(CURL *curl) {
 void set_host(char *host, char *port) {
 	bfw_url = malloc(21 + strlen(host) + strlen(port));
 	submit_url = malloc(20 + strlen(host) + strlen(port));
-	sprintf(bfw_url, "%s%s/miner/headerforwork", host, port);
-	sprintf(submit_url, "%s%s/miner/submitheader", host, port);
+	sprintf(bfw_url, "%s%s/miner/header", host, port);
+	sprintf(submit_url, "%s%s/miner/header", host, port);
 }
 
 // Write network data to a buffer (inBuf)
