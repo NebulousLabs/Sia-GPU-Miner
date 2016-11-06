@@ -20,7 +20,9 @@ struct inBuffer {
 };
 
 // URL strings for receiving and submitting blocks
-char *bfw_url, *submit_url;
+#define MAX_HOST_LEN (2048)
+char bfw_url[MAX_HOST_LEN];
+char submit_url[MAX_HOST_LEN];
 
 // CURL object to connect to siad
 CURL *curl;
@@ -41,8 +43,12 @@ int check_http_response(CURL *curl) {
 
 // set_host establishes the hostname and port that siad is on.
 void set_host(char *host, char *port) {
-	bfw_url = malloc(21 + strlen(host) + strlen(port));
-	submit_url = malloc(20 + strlen(host) + strlen(port));
+    size_t host_len = 21 + strlen(host) + strlen(port);
+    if (host_len >= MAX_HOST_LEN) {
+        printf("Error: host is over of size, host_len=%zu > MAX_HOST_LEN=%d\n", host_len, MAX_HOST_LEN);
+        exit(1);
+    }
+    
 	sprintf(bfw_url, "%s%s/miner/header", host, port);
 	sprintf(submit_url, "%s%s/miner/header", host, port);
 }
