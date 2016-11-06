@@ -243,7 +243,16 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Done. Return the platform ID and device ID object desired, free lists, and return.
 	*OCLPlatform = platformids[platformid];
 	*OCLDevice = deviceids[deviceidx];
+    
+    if (platformids) {
+        free(platformids);
+    }
+    
+    if (deviceids) {
+        free(deviceids);
+    }
 }
+
 
 // printPlatformsAndDevices prints out a list of opencl platforms and devices
 // that were found on the system.
@@ -302,10 +311,9 @@ void printPlatformsAndDevices() {
 			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_NAME, 80, str, NULL);
 			if (ret != CL_SUCCESS) {
 				printf("\tError while getting device info.\n");
-				free(deviceids);
-				continue;
-			}
-			printf("\tDevice %d: %s\n", j, str);
+            } else {
+                printf("\tDevice %d: %s\n", j, str);
+            }
 		}
 		free(deviceids);
 	}
