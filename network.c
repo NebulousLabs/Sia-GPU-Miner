@@ -45,7 +45,7 @@ int check_http_response(CURL *curl) {
 void set_host(char *host, char *port) {
     size_t host_len = 21 + strlen(host) + strlen(port);
     if (host_len >= MAX_HOST_LEN) {
-        printf("Error: host is over of size, host_len=%zu > MAX_HOST_LEN=%d\n", host_len, MAX_HOST_LEN);
+        fprintf(stderr, "Error: host is over of size, host_len=%zu > MAX_HOST_LEN=%d\n", host_len, MAX_HOST_LEN);
         exit(1);
     }
     
