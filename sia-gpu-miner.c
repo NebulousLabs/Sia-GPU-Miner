@@ -141,7 +141,7 @@ double grindNonces(int cycles_per_iter) {
 		if (ret != CL_SUCCESS) {
 			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 		}
-		if (nonceOut[0] != 0) {
+        if (*(uint64_t *)&nonceOut != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			if (!submit_header(blockHeader)) {
