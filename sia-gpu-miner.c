@@ -320,7 +320,7 @@ void printPlatformsAndDevices() {
             if (ret != CL_SUCCESS) {
                 printf("\tError while getting device CL_DEVICE_ENDIAN_LITTLE.\n");
             } else {
-                printf("\tDevice %d: CL_DEVICE_ENDIAN_LITTLE = %d\n", j, isLitlle);
+                printf("\tDevice %d: isLitlle: %d\n", j, isLitlle);
             }
 
             size_t bits = 0;
@@ -328,7 +328,7 @@ void printPlatformsAndDevices() {
             if (ret != CL_SUCCESS) {
                 printf("\tError while getting device CL_DEVICE_ADDRESS_BITS.\n");
             } else {
-                printf("\tDevice %d: CL_DEVICE_ADDRESS_BITS = %zu\n", j, bits);
+                printf("\tDevice %d: bits: %zu\n", j, bits);
             }
 
             size_t maxMemSize = 0;
@@ -336,7 +336,7 @@ void printPlatformsAndDevices() {
             if (ret != CL_SUCCESS) {
                 printf("\tError while getting device CL_DEVICE_MAX_MEM_ALLOC_SIZE.\n");
             } else {
-                printf("\tDevice %d: CL_DEVICE_MAX_MEM_ALLOC_SIZE = %zu\n", j, maxMemSize);
+                printf("\tDevice %d: maxMemSize: %zu\n", j, maxMemSize);
             }
 		}
 		free(deviceids);
