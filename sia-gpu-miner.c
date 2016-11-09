@@ -73,11 +73,7 @@ void quitSignal(int unused) {
 
 inline uint64_t get_timestamp_in_us()
 {
-#ifdef __linux__
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return (uint64_t)now.tv_sec * 1000000LL +now.tv_usec;
-#elif __APPLE__
+#if defined(__linux__) || defined(__APPLE__)
     struct timeval now;
     gettimeofday(&now, NULL);
     return (uint64_t)now.tv_sec * 1000000LL +now.tv_usec;
@@ -510,7 +506,6 @@ int main(int argc, char *argv[]) {
 	size_t max_group_size = 0;
 	ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &max_group_size, NULL);
 	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
-    printf("max_group_size=%zu\n", max_group_size);
 	if (local_item_size > max_group_size) {
 		printf("Selected device cannot handle work groups larger than %zu.\n", local_item_size);
 		printf("Using work groups of size %zu instead.\n", max_group_size);
