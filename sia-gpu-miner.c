@@ -14,6 +14,7 @@
 // OpenCL headers are different for Apple.
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
+#include <sys/time.h>
 #else
 #include <CL/cl.h>
 #endif
@@ -70,19 +71,27 @@ void quitSignal(int unused) {
 	printf("\nCaught kill signal, quitting...\n");
 }
 
+inline uint64_t get_timestamp_in_us()
+{
+#ifdef __linux__
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (uint64_t)now.tv_sec * 1000000LL +now.tv_usec;
+#elif __APPLE__
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return (uint64_t)now.tv_sec * 1000000LL +now.tv_usec;
+#else
+    return clock()/ CLOCKS_PER_SEC * 1000000LL;
+#endif
+
+}
+
 // Given a number of cycles per iter, grind nonces will poll Sia for a block
 // then do 2^intensity hashes cycles_per_iter times, checking for a successful
 // hash each time
 // Returns -1 if it finds a block, otherwise it returns the hash_rate of the GPU
 double grindNonces(int cycles_per_iter) {
-	// Start timing this iteration.
-	#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-	#else
-	clock_t startTime = clock();
-	#endif
-
 	uint8_t blockHeader[80];
 	uint8_t target[32] = {255};
 	uint8_t nonceOut[8] = {0};
@@ -111,6 +120,9 @@ double grindNonces(int cycles_per_iter) {
 	for (i = 0; i < 8; i++) {
 		blockHeader[i + 32] = target[7-i];
 	}
+
+    // Start timing this iteration.
+    int64_t beginInUs = get_timestamp_in_us();
 
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -153,17 +165,12 @@ double grindNonces(int cycles_per_iter) {
 	}
 
 	// Get the time elapsed this function.
-	#ifdef __linux__
-	clock_gettime(CLOCK_REALTIME, &end);
-	double nsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-	double run_time_seconds = nsElapsed * 1e-9;
-	#else
-	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-	#endif
-
-	// Calculate the hash rate of thie iteration.
-	double hash_rate = cycles_per_iter * global_item_size / (run_time_seconds*1000000);
-	return hash_rate;
+    int64_t endInUs = get_timestamp_in_us();
+    int64_t run_time_us = endInUs - beginInUs;
+    
+    // Calculate the hash rate of thie iteration.
+    double hash_rate = cycles_per_iter * global_item_size / (double)run_time_us;
+    return hash_rate;
 }
 
 // selectOCLDevice manages opencl device selection as requested by the command
@@ -503,6 +510,7 @@ int main(int argc, char *argv[]) {
 	size_t max_group_size = 0;
 	ret = clGetDeviceInfo(device_id, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &max_group_size, NULL);
 	if (ret != CL_SUCCESS) { printf("failed to get Device IDs: %d\n", ret); exit(1); }
+    printf("max_group_size=%zu\n", max_group_size);
 	if (local_item_size > max_group_size) {
 		printf("Selected device cannot handle work groups larger than %zu.\n", local_item_size);
 		printf("Using work groups of size %zu instead.\n", max_group_size);
