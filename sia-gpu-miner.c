@@ -76,11 +76,10 @@ inline uint64_t get_timestamp_in_us()
 #if defined(__linux__) || defined(__APPLE__)
     struct timeval now;
     gettimeofday(&now, NULL);
-    return (uint64_t)now.tv_sec * 1000000LL +now.tv_usec;
+    return now.tv_sec * 1000000LL + now.tv_usec;
 #else
     return clock()/ CLOCKS_PER_SEC * 1000000LL;
 #endif
-
 }
 
 // Given a number of cycles per iter, grind nonces will poll Sia for a block
