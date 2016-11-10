@@ -53,6 +53,36 @@ void set_host(char *host, char *port) {
 	sprintf(submit_url, "%s%s/miner/header", host, port);
 }
 
+static void printMem(const uint8_t *mem, size_t size, const char *format, int num_in_line){
+    if (format == NULL) {
+        format = "%02x ";
+    }
+    
+    if (num_in_line == 0) {
+        num_in_line = 16;
+    }
+    
+    for (int i=0; i<size; i++) {
+        printf(format, mem[i]);
+        if ((i+1)%num_in_line == 0) {
+            printf("\n");
+        }
+    }
+    printf("\n");
+}
+
+//static void printMemHex(const uint8_t *mem, size_t size){
+//    printMem(mem, size, "%02x ", 16);
+//}
+//
+//static void printMemChar(const uint8_t *mem, size_t size){
+//    printMem(mem, size, "%c", 16);
+//}
+//
+//static void printMemDec(const uint8_t *mem, size_t size){
+//    printMem(mem, size, "%d ", 16);
+//}
+
 // Write network data to a buffer (inBuf)
 size_t writefunc(void *ptr, size_t size, size_t num_elems, struct inBuffer *inBuf) {
 	if (inBuf == NULL) {
@@ -126,6 +156,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 // submit_header submits a block header to siad.
 int submit_header(uint8_t *header) {
 	CURLcode res;
+    struct inBuffer inBuf;
 
 	curl_easy_reset(curl);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Sia-Agent");
@@ -135,13 +166,20 @@ int submit_header(uint8_t *header) {
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
 	// Prevent printing to stdout
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &inBuf);
 
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		return 1;
 	}
+    
+    if (inBuf.bytes) {
+        printMem(inBuf.bytes, inBuf.len, "%c", INT_MAX);
+        
+        free(inBuf.bytes);
+    }
+    
 	return check_http_response(curl);
 }
 
