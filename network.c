@@ -7,7 +7,7 @@
 #else
 #ifdef __WINDOWS__
 #include <windows.h>
-#define sleep() Sleep()
+#define sleep(seconds) Sleep(seconds*1000)
 #endif
 #endif
 
