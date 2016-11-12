@@ -2,11 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
-#endif
+#else
 #ifdef __WINDOWS__
 #include <windows.h>
+#define sleep() Sleep()
+#endif
 #endif
 
 #include <curl/curl.h>
@@ -128,12 +130,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 		fprintf(stderr, "Failed to get header from %s, curl_easy_perform() failed: %s\n", bfw_url, curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		// Pause in order to prevent spamming the console
-#ifdef __linux__
 		sleep(3); // 3 seconds
-#endif
-#ifdef __WINDOWS__
-		Sleep(3000); // 3 seconds
-#endif
 	}
 
 	if (check_http_response(curl)) {
