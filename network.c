@@ -172,6 +172,7 @@ int submit_header(uint8_t *header) {
 	}
 	
 	if (inBuf.bytes) {
+		printf("\n");
 		printMem(inBuf.bytes, inBuf.len, "%c", INT_MAX);
 		
 		free(inBuf.bytes);
