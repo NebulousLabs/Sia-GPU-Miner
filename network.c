@@ -45,32 +45,32 @@ int check_http_response(CURL *curl) {
 
 // set_host establishes the hostname and port that siad is on.
 void set_host(char *host, char *port) {
-    size_t host_len = 21 + strlen(host) + strlen(port);
-    if (host_len >= MAX_HOST_LEN) {
-        fprintf(stderr, "Error: host is over of size, host_len=%zu > MAX_HOST_LEN=%d\n", host_len, MAX_HOST_LEN);
-        exit(1);
-    }
-    
+	size_t host_len = 21 + strlen(host) + strlen(port);
+	if (host_len >= MAX_HOST_LEN) {
+		fprintf(stderr, "Error: host is over of size, host_len=%zu > MAX_HOST_LEN=%d\n", host_len, MAX_HOST_LEN);
+		exit(1);
+	}
+	
 	sprintf(bfw_url, "%s%s/miner/header", host, port);
 	sprintf(submit_url, "%s%s/miner/header", host, port);
 }
 
-static void printMem(const uint8_t *mem, size_t size, const char *format, int num_in_line){
-    if (format == NULL) {
-        format = "%02x ";
-    }
-    
-    if (num_in_line == 0) {
-        num_in_line = 16;
-    }
-    
-    for (int i=0; i<size; i++) {
-        printf(format, mem[i]);
-        if ((i+1)%num_in_line == 0) {
-            printf("\n");
-        }
-    }
-    printf("\n");
+static void printMem(const uint8_t *mem, size_t size, const char *format, int num_in_line) {
+	if (format == NULL) {
+		format = "%02x ";
+	}
+	
+	if (num_in_line == 0) {
+		num_in_line = 16;
+	}
+	
+	for (int i=0; i<size; i++) {
+		printf(format, mem[i]);
+		if ((i+1)%num_in_line == 0) {
+			printf("\n");
+		}
+	}
+	printf("\n");
 }
 
 //static void printMemHex(const uint8_t *mem, size_t size){
@@ -153,7 +153,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 // submit_header submits a block header to siad.
 int submit_header(uint8_t *header) {
 	CURLcode res;
-    struct inBuffer inBuf;
+	struct inBuffer inBuf;
 
 	curl_easy_reset(curl);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Sia-Agent");
@@ -170,13 +170,13 @@ int submit_header(uint8_t *header) {
 		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		return 1;
 	}
-    
-    if (inBuf.bytes) {
-        printMem(inBuf.bytes, inBuf.len, "%c", INT_MAX);
-        
-        free(inBuf.bytes);
-    }
-    
+	
+	if (inBuf.bytes) {
+		printMem(inBuf.bytes, inBuf.len, "%c", INT_MAX);
+		
+		free(inBuf.bytes);
+	}
+	
 	return check_http_response(curl);
 }
 

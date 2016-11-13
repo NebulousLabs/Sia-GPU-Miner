@@ -73,11 +73,11 @@ void quitSignal(int unused) {
 
 inline uint64_t getTimestampInUs() {
 #if defined(__linux__) || defined(__APPLE__)
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    return now.tv_sec * 1000000LL + now.tv_usec;
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	return now.tv_sec * 1000000LL + now.tv_usec;
 #else
-    return clock()/ CLOCKS_PER_SEC * 1000000LL;
+	return clock()/ CLOCKS_PER_SEC * 1000000LL;
 #endif
 }
 
@@ -115,8 +115,8 @@ double grindNonces(int cycles_per_iter) {
 		blockHeader[i + 32] = target[7-i];
 	}
 
-    // Start timing this iteration.
-    int64_t beginInUs = getTimestampInUs();
+	// Start timing this iteration.
+	int64_t beginInUs = getTimestampInUs();
 
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -147,7 +147,7 @@ double grindNonces(int cycles_per_iter) {
 		if (ret != CL_SUCCESS) {
 			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 		}
-        if (*(uint64_t *)&nonceOut != 0) {
+		if (*(uint64_t *)&nonceOut != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			if (!submit_header(blockHeader)) {
@@ -159,12 +159,12 @@ double grindNonces(int cycles_per_iter) {
 	}
 
 	// Get the time elapsed this function.
-    int64_t endInUs = getTimestampInUs();
-    int64_t run_time_us = endInUs - beginInUs;
-    
-    // Calculate the hash rate of thie iteration.
-    double hash_rate = cycles_per_iter * global_item_size / (double)run_time_us;
-    return hash_rate;
+	int64_t endInUs = getTimestampInUs();
+	int64_t run_time_us = endInUs - beginInUs;
+	
+	// Calculate the hash rate of thie iteration.
+	double hash_rate = cycles_per_iter * global_item_size / (double)run_time_us;
+	return hash_rate;
 }
 
 // selectOCLDevice manages opencl device selection as requested by the command
@@ -244,14 +244,14 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Done. Return the platform ID and device ID object desired, free lists, and return.
 	*OCLPlatform = platformids[platformid];
 	*OCLDevice = deviceids[deviceidx];
-    
-    if (platformids) {
-        free(platformids);
-    }
-    
-    if (deviceids) {
-        free(deviceids);
-    }
+	
+	if (platformids) {
+		free(platformids);
+	}
+	
+	if (deviceids) {
+		free(deviceids);
+	}
 }
 
 
@@ -312,33 +312,33 @@ void printPlatformsAndDevices() {
 			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_NAME, 80, str, NULL);
 			if (ret != CL_SUCCESS) {
 				printf("\tError while getting device info.\n");
-            } else {
-                printf("\tDevice %d: %s\n", j, str);
-            }
-            
-            cl_bool isLitlle = CL_TRUE;
-            ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_ENDIAN_LITTLE, sizeof(isLitlle), &isLitlle, NULL);
-            if (ret != CL_SUCCESS) {
-                printf("\tError while getting device CL_DEVICE_ENDIAN_LITTLE.\n");
-            } else {
-                printf("\tDevice %d: isLitlle: %d\n", j, isLitlle);
-            }
+			} else {
+				printf("\tDevice %d: %s\n", j, str);
+			}
+			
+			cl_bool isLitlle = CL_TRUE;
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_ENDIAN_LITTLE, sizeof(isLitlle), &isLitlle, NULL);
+			if (ret != CL_SUCCESS) {
+				printf("\tError while getting device CL_DEVICE_ENDIAN_LITTLE.\n");
+			} else {
+				printf("\tDevice %d: isLitlle: %d\n", j, isLitlle);
+			}
 
-            size_t bits = 0;
-            ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_ADDRESS_BITS, sizeof(bits), &bits, NULL);
-            if (ret != CL_SUCCESS) {
-                printf("\tError while getting device CL_DEVICE_ADDRESS_BITS.\n");
-            } else {
-                printf("\tDevice %d: bits: %zu\n", j, bits);
-            }
+			size_t bits = 0;
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_ADDRESS_BITS, sizeof(bits), &bits, NULL);
+			if (ret != CL_SUCCESS) {
+				printf("\tError while getting device CL_DEVICE_ADDRESS_BITS.\n");
+			} else {
+				printf("\tDevice %d: bits: %zu\n", j, bits);
+			}
 
-            size_t maxMemSize = 0;
-            ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(maxMemSize), &maxMemSize, NULL);
-            if (ret != CL_SUCCESS) {
-                printf("\tError while getting device CL_DEVICE_MAX_MEM_ALLOC_SIZE.\n");
-            } else {
-                printf("\tDevice %d: maxMemSize: %zu\n", j, maxMemSize);
-            }
+			size_t maxMemSize = 0;
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(maxMemSize), &maxMemSize, NULL);
+			if (ret != CL_SUCCESS) {
+				printf("\tError while getting device CL_DEVICE_MAX_MEM_ALLOC_SIZE.\n");
+			} else {
+				printf("\tDevice %d: maxMemSize: %zu\n", j, maxMemSize);
+			}
 		}
 		free(deviceids);
 	}
