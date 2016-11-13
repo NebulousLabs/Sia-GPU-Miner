@@ -71,8 +71,7 @@ void quitSignal(int unused) {
 	printf("\nCaught kill signal, quitting...\n");
 }
 
-inline uint64_t get_timestamp_in_us()
-{
+inline uint64_t getTimestampInUs() {
 #if defined(__linux__) || defined(__APPLE__)
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -117,7 +116,7 @@ double grindNonces(int cycles_per_iter) {
 	}
 
     // Start timing this iteration.
-    int64_t beginInUs = get_timestamp_in_us();
+    int64_t beginInUs = getTimestampInUs();
 
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -160,7 +159,7 @@ double grindNonces(int cycles_per_iter) {
 	}
 
 	// Get the time elapsed this function.
-    int64_t endInUs = get_timestamp_in_us();
+    int64_t endInUs = getTimestampInUs();
     int64_t run_time_us = endInUs - beginInUs;
     
     // Calculate the hash rate of thie iteration.
