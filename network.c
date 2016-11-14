@@ -1,16 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#if defined(__linux__) || defined(__APPLE__)
-#include <unistd.h>
-#else
-#ifdef __WINDOWS__
-#include <windows.h>
-#define sleep(seconds) Sleep(seconds*1000)
-#endif
-#endif
-
 #include <curl/curl.h>
 
 #include "network.h"

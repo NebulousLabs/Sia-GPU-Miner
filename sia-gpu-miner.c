@@ -582,11 +582,14 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, quitSignal);
 	while (!quit) {
 		// Repeat until no block is found.
-		do {
-			hash_rate = grindNonces(cycles_per_iter);
-		} while (hash_rate == -1 && !quit);
+		hash_rate = grindNonces(cycles_per_iter);
+		if (quit) {
+			break;
+		}
 
-		if (!quit) {
+		if (hash_rate == -1 ) {
+			sleep(1);
+		} else {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);
 		}
