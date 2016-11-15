@@ -75,9 +75,10 @@ inline uint64_t getTimestampInUs() {
 #if defined(__linux__) || defined(__APPLE__)
 	struct timeval now;
 	gettimeofday(&now, NULL);
-	return now.tv_sec * 1000000LL + now.tv_usec;
+	return now.tv_sec * 1000000ULL + now.tv_usec;
 #else
-	return clock()/ CLOCKS_PER_SEC * 1000000LL;
+	//clock() maybe less than CLOCKS_PER_SEC, so must *1000000ULL first
+	return (clock() * 1000000ULL) / CLOCKS_PER_SEC;
 #endif
 }
 
