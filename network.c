@@ -1,14 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#ifdef __linux__
-#include <unistd.h>
-#endif
-#ifdef __WINDOWS__
-#include <windows.h>
-#endif
-
 #include <curl/curl.h>
 
 #include "network.h"
@@ -20,7 +12,9 @@ struct inBuffer {
 };
 
 // URL strings for receiving and submitting blocks
-char *bfw_url, *submit_url;
+#define MAX_HOST_LEN (2048)
+char bfw_url[MAX_HOST_LEN];
+char submit_url[MAX_HOST_LEN];
 
 // CURL object to connect to siad
 CURL *curl;
@@ -41,11 +35,45 @@ int check_http_response(CURL *curl) {
 
 // set_host establishes the hostname and port that siad is on.
 void set_host(char *host, char *port) {
-	bfw_url = malloc(21 + strlen(host) + strlen(port));
-	submit_url = malloc(20 + strlen(host) + strlen(port));
+	size_t host_len = 21 + strlen(host) + strlen(port);
+	if (host_len >= MAX_HOST_LEN) {
+		fprintf(stderr, "Error: host is over of size, host_len=%zu > MAX_HOST_LEN=%d\n", host_len, MAX_HOST_LEN);
+		exit(1);
+	}
+	
 	sprintf(bfw_url, "%s%s/miner/header", host, port);
 	sprintf(submit_url, "%s%s/miner/header", host, port);
 }
+
+static void printMem(const uint8_t *mem, size_t size, const char *format, int num_in_line) {
+	if (format == NULL) {
+		format = "%02x ";
+	}
+	
+	if (num_in_line == 0) {
+		num_in_line = 16;
+	}
+	
+	for (int i=0; i<size; i++) {
+		printf(format, mem[i]);
+		if ((i+1)%num_in_line == 0) {
+			printf("\n");
+		}
+	}
+	printf("\n");
+}
+
+//static void printMemHex(const uint8_t *mem, size_t size){
+//    printMem(mem, size, "%02x ", 16);
+//}
+//
+//static void printMemChar(const uint8_t *mem, size_t size){
+//    printMem(mem, size, "%c", 16);
+//}
+//
+//static void printMemDec(const uint8_t *mem, size_t size){
+//    printMem(mem, size, "%d ", 16);
+//}
 
 // Write network data to a buffer (inBuf)
 size_t writefunc(void *ptr, size_t size, size_t num_elems, struct inBuffer *inBuf) {
@@ -92,12 +120,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 		fprintf(stderr, "Failed to get header from %s, curl_easy_perform() failed: %s\n", bfw_url, curl_easy_strerror(res));
 		fprintf(stderr, "Are you sure that siad is running?\n");
 		// Pause in order to prevent spamming the console
-#ifdef __linux__
 		sleep(3); // 3 seconds
-#endif
-#ifdef __WINDOWS__
-		Sleep(3000); // 3 seconds
-#endif
 	}
 
 	if (check_http_response(curl)) {
@@ -120,6 +143,7 @@ int get_header_for_work(uint8_t *target, uint8_t *header) {
 // submit_header submits a block header to siad.
 int submit_header(uint8_t *header) {
 	CURLcode res;
+	struct inBuffer inBuf;
 
 	curl_easy_reset(curl);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Sia-Agent");
@@ -129,13 +153,21 @@ int submit_header(uint8_t *header) {
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, header);
 	// Prevent printing to stdout
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &inBuf);
 
 	res = curl_easy_perform(curl);
 	if (res != CURLE_OK) {
 		fprintf(stderr, "Failed to submit block, curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 		return 1;
 	}
+	
+	if (inBuf.bytes) {
+		printf("\n");
+		printMem(inBuf.bytes, inBuf.len, "%c", INT_MAX);
+		
+		free(inBuf.bytes);
+	}
+	
 	return check_http_response(curl);
 }
 

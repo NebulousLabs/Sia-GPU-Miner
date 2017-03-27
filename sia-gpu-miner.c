@@ -14,6 +14,7 @@
 // OpenCL headers are different for Apple.
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
+#include <sys/time.h>
 #else
 #include <CL/cl.h>
 #endif
@@ -70,19 +71,22 @@ void quitSignal(int unused) {
 	printf("\nCaught kill signal, quitting...\n");
 }
 
+inline uint64_t getTimestampInUs() {
+#if defined(__linux__) || defined(__APPLE__)
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	return now.tv_sec * 1000000ULL + now.tv_usec;
+#else
+	//clock() maybe less than CLOCKS_PER_SEC, so must *1000000ULL first
+	return (clock() * 1000000ULL) / CLOCKS_PER_SEC;
+#endif
+}
+
 // Given a number of cycles per iter, grind nonces will poll Sia for a block
 // then do 2^intensity hashes cycles_per_iter times, checking for a successful
 // hash each time
 // Returns -1 if it finds a block, otherwise it returns the hash_rate of the GPU
 double grindNonces(int cycles_per_iter) {
-	// Start timing this iteration.
-	#ifdef __linux__
-	struct timespec begin, end;
-	clock_gettime(CLOCK_REALTIME, &begin);
-	#else
-	clock_t startTime = clock();
-	#endif
-
 	uint8_t blockHeader[80];
 	uint8_t target[32] = {255};
 	uint8_t nonceOut[8] = {0};
@@ -111,6 +115,9 @@ double grindNonces(int cycles_per_iter) {
 	for (i = 0; i < 8; i++) {
 		blockHeader[i + 32] = target[7-i];
 	}
+
+	// Start timing this iteration.
+	int64_t beginInUs = getTimestampInUs();
 
 	// By doing a bunch of low intensity calls, we prevent freezing
 	// By splitting them up inside this function, we also avoid calling
@@ -141,7 +148,7 @@ double grindNonces(int cycles_per_iter) {
 		if (ret != CL_SUCCESS) {
 			printf("failed to read nonce from buffer: %d\n", ret); exit(1);
 		}
-		if (nonceOut[0] != 0) {
+		if (*(uint64_t *)&nonceOut != 0) {
 			// Copy nonce to header.
 			memcpy(blockHeader+32, nonceOut, 8);
 			if (!submit_header(blockHeader)) {
@@ -153,16 +160,11 @@ double grindNonces(int cycles_per_iter) {
 	}
 
 	// Get the time elapsed this function.
-	#ifdef __linux__
-	clock_gettime(CLOCK_REALTIME, &end);
-	double nsElapsed = 1e9 * (double)(end.tv_sec - begin.tv_sec) + (double)(end.tv_nsec - begin.tv_nsec);
-	double run_time_seconds = nsElapsed * 1e-9;
-	#else
-	double run_time_seconds = (double)(clock() - startTime) / CLOCKS_PER_SEC;
-	#endif
-
+	int64_t endInUs = getTimestampInUs();
+	int64_t run_time_us = endInUs - beginInUs;
+	
 	// Calculate the hash rate of thie iteration.
-	double hash_rate = cycles_per_iter * global_item_size / (run_time_seconds*1000000);
+	double hash_rate = cycles_per_iter * global_item_size / (double)run_time_us;
 	return hash_rate;
 }
 
@@ -243,7 +245,16 @@ void selectOCLDevice(cl_platform_id *OCLPlatform, cl_device_id *OCLDevice, cl_ui
 	// Done. Return the platform ID and device ID object desired, free lists, and return.
 	*OCLPlatform = platformids[platformid];
 	*OCLDevice = deviceids[deviceidx];
+	
+	if (platformids) {
+		free(platformids);
+	}
+	
+	if (deviceids) {
+		free(deviceids);
+	}
 }
+
 
 // printPlatformsAndDevices prints out a list of opencl platforms and devices
 // that were found on the system.
@@ -301,11 +312,38 @@ void printPlatformsAndDevices() {
 			// Print platform info.
 			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_NAME, 80, str, NULL);
 			if (ret != CL_SUCCESS) {
-				printf("\tError while getting device info.\n");
-				free(deviceids);
-				continue;
+				printf("\tDevice %d: Error while getting device info.\n", j);
+			} else {
+				printf("\tDevice %d: %s\n", j, str);
 			}
-			printf("\tDevice %d: %s\n", j, str);
+			
+			cl_bool isLittle = CL_TRUE;
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_ENDIAN_LITTLE, sizeof(isLittle), &isLittle, NULL);
+			if (ret != CL_SUCCESS) {
+				printf("\t\t  Error while getting device CL_DEVICE_ENDIAN_LITTLE.\n");
+			} else {
+				if (isLittle) {
+					printf("\t\t  Endianness: Little-endian\n");
+				} else {
+					printf("\t\t  Endianness: Big-endian\n");
+				}
+			}
+
+			size_t bits = 0;
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_ADDRESS_BITS, sizeof(bits), &bits, NULL);
+			if (ret != CL_SUCCESS) {
+				printf("\t\t  Error while getting device CL_DEVICE_ADDRESS_BITS.\n");
+			} else {
+				printf("\t\t  Address space: %zubits\n", bits);
+			}
+
+			size_t maxMemSize = 0;
+			ret = clGetDeviceInfo(deviceids[j], CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(maxMemSize), &maxMemSize, NULL);
+			if (ret != CL_SUCCESS) {
+				printf("\t\t  Error while getting device CL_DEVICE_MAX_MEM_ALLOC_SIZE.\n");
+			} else {
+				printf("\t\t  MaxMemAllocSize: %zu\n", maxMemSize);
+			}
 		}
 		free(deviceids);
 	}
@@ -545,11 +583,14 @@ int main(int argc, char *argv[]) {
 	signal(SIGINT, quitSignal);
 	while (!quit) {
 		// Repeat until no block is found.
-		do {
-			hash_rate = grindNonces(cycles_per_iter);
-		} while (hash_rate == -1 && !quit);
+		hash_rate = grindNonces(cycles_per_iter);
+		if (quit) {
+			break;
+		}
 
-		if (!quit) {
+		if (hash_rate == -1 ) {
+			sleep(1);
+		} else {
 			printf("\rMining at %.3f MH/s\t%u blocks mined", hash_rate, blocks_mined);
 			fflush(stdout);
 		}
