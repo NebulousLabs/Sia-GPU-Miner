@@ -4,6 +4,11 @@ and prints your hashrate along side the number of blocks you've mined. Most
 cards will see greatly increased hashrates by increasing the value of 'I'
 (default is 16, optimal is typically 20-25).
 
+## install dependencies (ubuntu 16.04)
+```
+sudo apt-get install opencl-headers libcurl4-gnutls-dev
+sudo ln -s /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /usr/lib/libOpenCL.so
+```
 ## How to Use
 1) Build the miner by running `make`.
 
