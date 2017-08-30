@@ -12,7 +12,7 @@ sudo ln -s /usr/lib/x86_64-linux-gnu/libOpenCL.so.1 /usr/lib/libOpenCL.so
 ## How to Use
 1) Build the miner by running `make`.
 
-2) Make sure you have a recent version of Sia installed and running.
+2) Make sure you have a recent version of Sia installed and running. You must run Sia with the `miner` module enabled, which is not enabled by default in `Sia-UI`. To run with the miner module, use `siad`'s `-M` flag and specify the `m` module. See `siad modules`.
 
 3) Run the miner by running `./gpu-miner`. It will mine blocks until killed with Ctrl-C.
 
